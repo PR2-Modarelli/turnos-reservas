@@ -1,0 +1,19 @@
+name: turnos-reservas
+services:
+  postgresql:
+    image: postgres:18.6
+    environment:
+      POSTGRES_DB: turnos
+      POSTGRES_USER: turnos
+      POSTGRES_PASSWORD: ${TURNOS_DB_PASSWORD:?Definir TURNOS_DB_PASSWORD en .env}
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - turnos-postgresql:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U turnos -d turnos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  turnos-postgresql:

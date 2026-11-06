@@ -1,0 +1,27 @@
+server:
+  port: ${TURNOS_PORT:8082}
+spring:
+  application:
+    name: turnos-reservas
+  datasource:
+    url: ${TURNOS_DB_URL:jdbc:postgresql://localhost:5434/turnos}
+    username: ${TURNOS_DB_USER:turnos}
+    password: ${TURNOS_DB_PASSWORD}
+    hikari:
+      connection-timeout: 5000
+  liquibase:
+    change-log: classpath:config/liquibase/master.xml
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+turnos:
+  jwt-secret: ${TURNOS_JWT_SECRET}
+  zona: ${TURNOS_ZONA:America/Argentina/Mendoza}
+  catalogo-url: ${CATALOGO_URL:http://localhost:8081}
+  catedra-url: ${CATEDRA_BASE_URL:}
+  catedra-token: ${CATEDRA_TOKEN:}

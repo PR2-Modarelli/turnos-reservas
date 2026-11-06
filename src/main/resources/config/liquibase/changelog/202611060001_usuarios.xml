@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="202611060001" author="modarelli">
+  <sql><![CDATA[
+   create table app_user (
+    id bigint generated always as identity primary key,
+    public_id uuid not null unique,
+    login varchar(50) not null,
+    password_hash varchar(255) not null,
+    first_name varchar(50), last_name varchar(50),
+    email varchar(254) not null,
+    image_url varchar(256), lang_key varchar(10) not null,
+    activated boolean not null default true,
+    created_at timestamp with time zone not null,
+    constraint uk_app_user_login unique(login),
+    constraint uk_app_user_email unique(email),
+    constraint ck_app_user_login_lower check (login = lower(login)),
+    constraint ck_app_user_email_lower check (email = lower(email))
+   );
+  ]]></sql>
+  <rollback><sql>drop table app_user;</sql></rollback>
+ </changeSet>
+</databaseChangeLog>
