@@ -14,7 +14,7 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 public class SeguridadConfiguration {
     @Bean
-    JwtDecoder jwtDecoder(@Value("${turnos.jwt-secret}") String secret) {
+    JwtDecoder jwtDecoder(@Value("${turnos.jwt-secret}") String secret, java.time.Clock reloj) {
         byte[] key = Base64.getDecoder().decode(secret);
         if (key.length < 64) throw new IllegalArgumentException("La clave JWT debe tener al menos 64 bytes");
         var decoder=NimbusJwtDecoder.withSecretKey(new SecretKeySpec(key, "HmacSHA512"))
@@ -25,8 +25,9 @@ public class SeguridadConfiguration {
                     new org.springframework.security.oauth2.core.OAuth2Error("invalid_token","Faltan campos obligatorios",null));
             return org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.success();
         };
-        decoder.setJwtValidator(new org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator<>(
-            JwtValidators.createDefault(),camposObligatorios));
+        var vigencia=new JwtTimestampValidator();
+        vigencia.setClock(reloj);
+        decoder.setJwtValidator(JwtValidators.createDefaultWithValidators(vigencia,camposObligatorios));
         return decoder;
     }
     @Bean

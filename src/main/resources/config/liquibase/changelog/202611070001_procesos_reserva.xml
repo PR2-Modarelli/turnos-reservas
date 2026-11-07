@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="202611070001" author="modarelli">
+  <sql><![CDATA[
+   create table proceso_reserva (
+    id uuid primary key,
+    usuario_id bigint not null references app_user(id),
+    idempotency_key uuid not null,
+    profesional_id bigint not null check (profesional_id > 0),
+    fecha date not null, hora_inicio time without time zone not null,
+    estado varchar(32) not null check (estado in ('CREADO','SOLICITANDO','BLOQUEADO','RECHAZADO','RESULTADO_DESCONOCIDO','VENCIDO')),
+    hold_id varchar(200) unique, reservation_process_id varchar(200) unique,
+    vence_en timestamp with time zone,
+    error_code varchar(80), error_http integer,
+    creado_en timestamp with time zone not null, actualizado_en timestamp with time zone not null,
+    constraint uk_proceso_usuario_clave unique(usuario_id,idempotency_key),
+    constraint ck_proceso_hold_datos check (estado not in ('BLOQUEADO','VENCIDO') or
+        (hold_id is not null and reservation_process_id is not null and vence_en is not null))
+   );
+   create unique index uk_proceso_usuario_slot_activo on proceso_reserva(usuario_id,profesional_id,fecha,hora_inicio)
+    where estado in ('CREADO','SOLICITANDO','BLOQUEADO','RESULTADO_DESCONOCIDO');
+  ]]></sql>
+  <rollback><sql>drop table proceso_reserva;</sql></rollback>
+ </changeSet>
+</databaseChangeLog>

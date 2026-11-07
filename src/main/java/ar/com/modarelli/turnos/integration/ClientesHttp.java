@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.*;
 
 @Component
-public class ClientesHttp implements CatalogoGateway, OcupacionesGateway {
+public class ClientesHttp implements CatalogoGateway, OcupacionesGateway, HoldGateway {
     private final RestClient cliente;
     private final String catalogoUrl, catedraUrl, catedraToken;
     @org.springframework.beans.factory.annotation.Autowired
@@ -61,6 +61,39 @@ public class ClientesHttp implements CatalogoGateway, OcupacionesGateway {
             if (respuesta==null) throw invalida();
             return respuesta;
         } catch (RestClientException e) { throw noDisponible(); }
+    }
+    @Override public void exigirConfiguracionHold() {
+        if(catedraToken.isBlank()) throw new ErrorTurnos(HttpStatus.SERVICE_UNAVAILABLE,
+            "INTEGRACION_NO_CONFIGURADA","Falta configurar la integracion con catedra");
+        uri(catedraUrl,"/api/appointment-holds");
+    }
+    @Override public HoldRespuesta crearHold(HoldSolicitud solicitud) {
+        exigirConfiguracionHold();
+        try {
+            var respuesta=cliente.post().uri(uri(catedraUrl,"/api/appointment-holds"))
+                .headers(h->h.setBearerAuth(catedraToken)).contentType(MediaType.APPLICATION_JSON)
+                .body(solicitud).retrieve().toEntity(HoldRespuesta.class);
+            HoldRespuesta body=respuesta.getBody();
+            if(respuesta.getStatusCode().value()!=201 || body==null || !"HELD".equals(body.status()) ||
+                !idValido(body.holdId()) || !idValido(body.reservationProcessId()) || body.expiresAt()==null)
+                throw incierto();
+            return body;
+        } catch(RestClientResponseException e) {
+            int http=e.getStatusCode().value();
+            if(http==401 || http==403) throw new ErrorHoldRemoto(false,HttpStatus.SERVICE_UNAVAILABLE,"INTEGRACION_NO_AUTORIZADA");
+            String code=null;
+            try { var error=e.getResponseBodyAs(ProblemaHold.class);if(error!=null)code=error.code(); }
+            catch(RestClientException | IllegalArgumentException ignored) { /* No exponer el body externo. */ }
+            boolean rechazo=(http==400 && java.util.Set.of("VALIDATION_ERROR","PROFESSIONAL_DISABLED","INVALID_SLOT").contains(code==null?"":code)) ||
+                (http==404 && "PROFESSIONAL_NOT_FOUND".equals(code)) ||
+                (http==409 && ("SLOT_ALREADY_HELD".equals(code) || "SLOT_ALREADY_RESERVED".equals(code)));
+            if(rechazo) throw new ErrorHoldRemoto(false,HttpStatus.valueOf(http),code);
+            throw incierto();
+        } catch(RestClientException e) { throw incierto(); }
+    }
+    private boolean idValido(String id) { return id!=null && !id.isBlank() && id.length()<=200; }
+    private ErrorHoldRemoto incierto() {
+        return new ErrorHoldRemoto(true,HttpStatus.SERVICE_UNAVAILABLE,"RESULTADO_HOLD_DESCONOCIDO");
     }
     private ErrorTurnos noDisponible() { return new ErrorTurnos(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCIA_NO_DISPONIBLE", "No se pudo consultar una dependencia"); }
     private ErrorTurnos invalida() { return new ErrorTurnos(HttpStatus.BAD_GATEWAY, "RESPUESTA_EXTERNA_INVALIDA", "Una dependencia devolvio datos invalidos"); }
