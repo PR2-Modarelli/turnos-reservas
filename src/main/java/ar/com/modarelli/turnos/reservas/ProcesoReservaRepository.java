@@ -27,7 +27,7 @@ public class ProcesoReservaRepository {
         }
         var activos=jdbc.query("""
             select * from proceso_reserva where usuario_id=? and profesional_id=? and fecha=? and hora_inicio=?
-              and estado in ('CREADO','SOLICITANDO','BLOQUEADO','RESULTADO_DESCONOCIDO')
+              and estado in ('CREADO','SOLICITANDO','BLOQUEADO','RESULTADO_DESCONOCIDO','CONFIRMANDO','ESPERANDO_TELEFONO','CONFIRMACION_DESCONOCIDA','CONFIRMACION_RECHAZADA')
             """,this::mapear,usuario,s.profesionalId(),s.fecha(),s.horaInicio());
         if(!activos.isEmpty())throw new ErrorBloqueo(HttpStatus.CONFLICT,"PROCESO_ACTIVO_EXISTENTE",
             "Ya existe un intento activo para ese turno",activos.getFirst().id());
@@ -69,11 +69,43 @@ public class ProcesoReservaRepository {
              where id=? and estado in ('SOLICITANDO','RESULTADO_DESCONOCIDO')
             """,vence.isAfter(ahora)?"BLOQUEADO":"VENCIDO",holdId,remoto,Timestamp.from(vence),Timestamp.from(ahora),id);
     }
+    public record PreparacionConfirmacion(Proceso proceso,boolean enviar) {}
+    @Transactional
+    public PreparacionConfirmacion prepararConfirmacion(UUID id,long usuario,Instant ahora) {
+        var p=jdbc.query("select * from proceso_reserva where id=? and usuario_id=? for update",this::mapear,id,usuario)
+            .stream().findFirst().orElseThrow(()->new ErrorBloqueo(HttpStatus.NOT_FOUND,"PROCESO_NO_ENCONTRADO","Proceso inexistente",null));
+        if(p.estado()==Estado.BLOQUEADO && !p.expiresAt().isAfter(ahora)) {
+            jdbc.update("update proceso_reserva set estado='VENCIDO',actualizado_en=? where id=?",Timestamp.from(ahora),id);
+            return new PreparacionConfirmacion(buscar(id,usuario),false);
+        }
+        if(p.estado()!=Estado.BLOQUEADO)return new PreparacionConfirmacion(p,false);
+        jdbc.update("""
+            update proceso_reserva set estado='CONFIRMANDO',confirmacion_iniciada_en=?,actualizado_en=?,error_code=null,error_http=null
+             where id=?
+            """,Timestamp.from(ahora),Timestamp.from(ahora),id);
+        return new PreparacionConfirmacion(buscar(id,usuario),true);
+    }
+    public void guardarConfirmacion(UUID id,Instant vence,Instant ahora) {
+        jdbc.update("""
+            update proceso_reserva set estado='ESPERANDO_TELEFONO',confirmacion_vence_en=?,actualizado_en=?,error_code=null,error_http=null
+             where id=? and estado in ('CONFIRMANDO','CONFIRMACION_DESCONOCIDA')
+            """,Timestamp.from(vence),Timestamp.from(ahora),id);
+    }
+    public void fallarConfirmacion(UUID id,boolean incierta,String code,int http,Instant ahora) {
+        jdbc.update("""
+            update proceso_reserva set estado=?,error_code=?,error_http=?,actualizado_en=?
+             where id=? and estado in ('CONFIRMANDO','CONFIRMACION_DESCONOCIDA')
+            """,incierta?"CONFIRMACION_DESCONOCIDA":"CONFIRMACION_RECHAZADA",code,http,Timestamp.from(ahora),id);
+    }
     private void refrescar(long usuario,Instant ahora) {
         jdbc.update("""
             update proceso_reserva set estado='VENCIDO',actualizado_en=?
-             where usuario_id=? and estado='BLOQUEADO' and vence_en<=?
+             where usuario_id=? and estado in ('BLOQUEADO','CONFIRMACION_RECHAZADA') and vence_en<=?
             """,Timestamp.from(ahora),usuario,Timestamp.from(ahora));
+        jdbc.update("""
+            update proceso_reserva set estado='CONFIRMACION_DESCONOCIDA',error_code='RESULTADO_CONFIRMACION_DESCONOCIDO',error_http=503,actualizado_en=?
+             where usuario_id=? and estado='CONFIRMANDO' and actualizado_en<=?
+            """,Timestamp.from(ahora),usuario,Timestamp.from(ahora.minusSeconds(30)));
         // Un proceso local anterior al envio puede abandonarse con seguridad. Uno ya enviado no puede repetirse.
         jdbc.update("""
             update proceso_reserva set estado='RECHAZADO',error_code='VALIDACION_INTERRUMPIDA',error_http=503,actualizado_en=?
@@ -90,6 +122,7 @@ public class ProcesoReservaRepository {
             f.getLong("profesional_id"),f.getObject("fecha",LocalDate.class),f.getObject("hora_inicio",LocalTime.class),
             Estado.valueOf(f.getString("estado")),f.getString("hold_id"),f.getString("reservation_process_id"),
             vence==null?null:vence.toInstant(),f.getString("error_code"),(Integer)f.getObject("error_http"),
-            f.getTimestamp("creado_en").toInstant(),f.getTimestamp("actualizado_en").toInstant());
+            f.getTimestamp("creado_en").toInstant(),f.getTimestamp("actualizado_en").toInstant(),
+            f.getTimestamp("confirmacion_vence_en")==null?null:f.getTimestamp("confirmacion_vence_en").toInstant());
     }
 }

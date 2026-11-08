@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="202611080001" author="modarelli">
+  <sql><![CDATA[
+   alter table proceso_reserva add column confirmacion_iniciada_en timestamp with time zone;
+   alter table proceso_reserva add column confirmacion_vence_en timestamp with time zone;
+   alter table proceso_reserva drop constraint proceso_reserva_estado_check;
+   alter table proceso_reserva add constraint proceso_reserva_estado_check check (estado in
+    ('CREADO','SOLICITANDO','BLOQUEADO','RECHAZADO','RESULTADO_DESCONOCIDO','VENCIDO',
+     'CONFIRMANDO','ESPERANDO_TELEFONO','CONFIRMACION_DESCONOCIDA','CONFIRMACION_RECHAZADA'));
+   drop index uk_proceso_usuario_slot_activo;
+   create unique index uk_proceso_usuario_slot_activo on proceso_reserva(usuario_id,profesional_id,fecha,hora_inicio)
+    where estado in ('CREADO','SOLICITANDO','BLOQUEADO','RESULTADO_DESCONOCIDO',
+      'CONFIRMANDO','ESPERANDO_TELEFONO','CONFIRMACION_DESCONOCIDA','CONFIRMACION_RECHAZADA');
+  ]]></sql>
+ </changeSet>
+</databaseChangeLog>

@@ -3,4 +3,5 @@
  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
  <include file="config/liquibase/changelog/202611060001_usuarios.xml"/>
  <include file="config/liquibase/changelog/202611070001_procesos_reserva.xml"/>
+ <include file="config/liquibase/changelog/202611080001_confirmacion_inicial.xml"/>
 </databaseChangeLog>

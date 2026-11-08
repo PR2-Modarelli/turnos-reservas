@@ -2,7 +2,7 @@
 
 ## Alcance
 
-Implementa la creación de un hold y la consulta de su proceso por el propietario. No confirma ni cancela reservas y no inicia todavía el intercambio de teléfono por Kafka.
+Implementa la creación de un hold y la consulta de su proceso por el propietario. La [confirmación inicial REST](CONFIRMACION.md) amplía este flujo. No cancela reservas ni inicia todavía el intercambio de teléfono por Kafka.
 
 El bloqueo de cátedra es autoritativo: consultar disponibilidad antes no garantiza que el turno siga libre. El POST remoto decide el conflicto de manera definitiva. Turnos valida la agenda vigente mediante su API propia de catálogo antes de enviar el POST, sin consultar tablas ni replicar el catálogo.
 
@@ -114,3 +114,7 @@ Una respuesta de catálogo inválida conserva su 502. Cátedra puede devolver 40
 ## Pruebas
 
 `./mvnw test` y `./mvnw package` incluyen `BloqueosHttpTest`, con PostgreSQL Testcontainers y servidores HTTP locales. Cubren propiedad, autenticación, contrato/credenciales, agenda, conflictos, idempotencia, concurrencia, vencimiento, respuesta perdida, timeout real de lectura, interrupción durable y fallo de persistencia posterior al hold. No crean holds contra cátedra ni cambian sus ocupaciones.
+
+## Ampliación: confirmación inicial
+
+El estado incorpora CONFIRMANDO, ESPERANDO_TELEFONO, CONFIRMACION_DESCONOCIDA y CONFIRMACION_RECHAZADA. La vista agrega `confirmacionExpiresAt`, nulo antes de aceptar la confirmación. La espera o incertidumbre de confirmación no se transforma automáticamente en VENCIDO usando el TTL del hold. El diagrama anterior describe solo la creación del hold; ver [confirmación REST](CONFIRMACION.md) para las transiciones posteriores.
