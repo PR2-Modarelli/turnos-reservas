@@ -1,6 +1,6 @@
 # Turnos y reservas
 
-Servicio Java 21 y Spring Boot para construir disponibilidad consultando el servicio propio de catálogo y las ocupaciones de la cátedra. Puerto local 8082. Incluye registro de usuarios, login con JWT y consulta de cuenta propia. Todavía no crea holds ni persiste reservas.
+Servicio Java 21 y Spring Boot para construir disponibilidad consultando el servicio propio de catálogo y las ocupaciones de la cátedra. Puerto local 8082. Incluye registro de usuarios, login con JWT y consulta de cuenta propia. Incluye creación de bloqueos temporales y persistencia de procesos asociados al usuario; la confirmación de reservas todavía está pendiente.
 
 ## Requisitos
 
@@ -61,6 +61,14 @@ curl -sS --max-time 20 \
 Usar una fecha entre hoy y los próximos 90 días. La consulta es informativa: no garantiza que un turno permanezca libre ni crea un bloqueo.
 
 Los DTO, errores, validaciones y límites se describen en [contratos](docs/CONTRATOS_TURNOS.md).
+
+## Bloqueos temporales
+
+`POST /api/turnos/bloqueos` valida la agenda vigente y solicita un hold asociado a la cuenta autenticada. Requiere la cabecera `Idempotency-Key` (UUID) y el body `profesionalId`, `fecha`, `horaInicio`. `GET /api/turnos/procesos/{id}` permite consultar solo un proceso propio.
+
+La clave se conserva para repetir la misma intención sin duplicar envíos. Si se pierde una respuesta, el proceso se mantiene con resultado desconocido; cambiar la clave tampoco genera otro hold del mismo usuario/slot. No se confirma la reserva todavía. Ver [contrato de bloqueos y límites de recuperación](docs/BLOQUEOS.md).
+
+Al actualizar el servicio, Liquibase aplica la nueva migración en la base de turnos durante el arranque. No requiere borrar datos ni reiniciar la base del catálogo.
 
 ## Pruebas y empaquetado
 

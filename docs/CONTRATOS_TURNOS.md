@@ -41,4 +41,4 @@ Los errores propios usan `application/problem+json`. No se devuelven cuerpos ext
 
 ## Propiedad y alcance
 
-La disponibilidad no almacena una réplica de catálogo. Turnos ya persiste sus usuarios en `app_user`, con PostgreSQL y migraciones exclusivas; ver [usuarios y seguridad](USUARIOS_SEGURIDAD.md). No se permite usar la base del catálogo. Holds, confirmación REST/Kafka, cancelación, recuperación de procesos, HTTPS y despliegue Compose completo aún no forman parte de este módulo. El uso local de HTTP queda limitado al desarrollo; el despliegue debe proteger el transporte.
+La disponibilidad no almacena una réplica de catálogo. Turnos ya persiste sus usuarios en `app_user`, con PostgreSQL y migraciones exclusivas; ver [usuarios y seguridad](USUARIOS_SEGURIDAD.md). No se permite usar la base del catálogo. La creación de holds y la consulta del proceso propio se describen en [bloqueos](BLOQUEOS.md). Confirmación REST/Kafka, cancelación, reconciliación general de procesos, HTTPS y despliegue Compose completo siguen pendientes. El uso local de HTTP queda limitado al desarrollo; el despliegue debe proteger el transporte.

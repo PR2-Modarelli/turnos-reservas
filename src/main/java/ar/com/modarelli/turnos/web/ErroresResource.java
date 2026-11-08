@@ -8,6 +8,8 @@ public class ErroresResource {
     ProblemDetail manejar(ErrorTurnos error) {
         ProblemDetail problema=ProblemDetail.forStatusAndDetail(error.status(),error.getMessage());
         problema.setProperty("code",error.code());
+        if(error instanceof ar.com.modarelli.turnos.reservas.ErrorBloqueo bloqueo && bloqueo.procesoId()!=null)
+            problema.setProperty("procesoId",bloqueo.procesoId());
         return problema;
     }
     @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
@@ -27,5 +29,11 @@ public class ErroresResource {
     ProblemDetail baseNoDisponible() {
         ProblemDetail problema=ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,"No se pudo acceder a los datos de turnos");
         problema.setProperty("code","PERSISTENCIA_NO_DISPONIBLE");return problema;
+    }
+    @ExceptionHandler({org.springframework.web.bind.ServletRequestBindingException.class,
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
+    ProblemDetail parametrosInvalidos() {
+        ProblemDetail problema=ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,"Parametro o cabecera obligatoria ausente o invalida");
+        problema.setProperty("code","VALIDATION_ERROR");return problema;
     }
 }
