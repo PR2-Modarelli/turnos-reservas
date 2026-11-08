@@ -1,6 +1,6 @@
 # Turnos y reservas
 
-Servicio Java 21 y Spring Boot para construir disponibilidad consultando el servicio propio de catálogo y las ocupaciones de la cátedra. Puerto local 8082. Incluye registro de usuarios, login con JWT y consulta de cuenta propia. Incluye creación de bloqueos temporales y persistencia de procesos asociados al usuario; la confirmación de reservas todavía está pendiente.
+Servicio Java 21 y Spring Boot para construir disponibilidad consultando el servicio propio de catálogo y las ocupaciones de la cátedra. Puerto local 8082. Incluye registro de usuarios, login con JWT y consulta de cuenta propia. Incluye creación de bloqueos temporales y persistencia de procesos asociados al usuario; la confirmación inicial REST está implementada; el paso de teléfono y el resultado final por Kafka todavía están pendientes.
 
 ## Requisitos
 
@@ -66,7 +66,7 @@ Los DTO, errores, validaciones y límites se describen en [contratos](docs/CONTR
 
 `POST /api/turnos/bloqueos` valida la agenda vigente y solicita un hold asociado a la cuenta autenticada. Requiere la cabecera `Idempotency-Key` (UUID) y el body `profesionalId`, `fecha`, `horaInicio`. `GET /api/turnos/procesos/{id}` permite consultar solo un proceso propio.
 
-La clave se conserva para repetir la misma intención sin duplicar envíos. Si se pierde una respuesta, el proceso se mantiene con resultado desconocido; cambiar la clave tampoco genera otro hold del mismo usuario/slot. No se confirma la reserva todavía. Ver [contrato de bloqueos y límites de recuperación](docs/BLOQUEOS.md).
+La clave se conserva para repetir la misma intención sin duplicar envíos. Si se pierde una respuesta, el proceso se mantiene con resultado desconocido; cambiar la clave tampoco genera otro hold del mismo usuario/slot. La confirmación inicial se solicita mediante `POST /api/turnos/procesos/{id}/confirmacion`, sin datos de paciente en el body. Su aceptación deja el proceso ESPERANDO_TELEFONO y no constituye la reserva final. Ver [bloqueos](docs/BLOQUEOS.md) y [confirmación REST](docs/CONFIRMACION.md).
 
 Al actualizar el servicio, Liquibase aplica la nueva migración en la base de turnos durante el arranque. No requiere borrar datos ni reiniciar la base del catálogo.
 

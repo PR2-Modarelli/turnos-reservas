@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.*;
 
 @Component
-public class ClientesHttp implements CatalogoGateway, OcupacionesGateway, HoldGateway {
+public class ClientesHttp implements CatalogoGateway, OcupacionesGateway, HoldGateway, ConfirmacionGateway {
     private final RestClient cliente;
     private final String catalogoUrl, catedraUrl, catedraToken;
     @org.springframework.beans.factory.annotation.Autowired
@@ -90,6 +90,35 @@ public class ClientesHttp implements CatalogoGateway, OcupacionesGateway, HoldGa
             if(rechazo) throw new ErrorHoldRemoto(false,HttpStatus.valueOf(http),code);
             throw incierto();
         } catch(RestClientException e) { throw incierto(); }
+    }
+    @Override public RespuestaConfirmacion confirmarHold(String holdId,String procesoRemoto,SolicitudConfirmacion solicitud) {
+        exigirConfiguracionHold();
+        String segmento=java.net.URLEncoder.encode(holdId,java.nio.charset.StandardCharsets.UTF_8).replace("+","%20");
+        try {
+            var respuesta=cliente.post().uri(uri(catedraUrl,"/api/appointment-holds/"+segmento+"/confirm"))
+                .headers(h->h.setBearerAuth(catedraToken)).contentType(MediaType.APPLICATION_JSON)
+                .body(solicitud).retrieve().toEntity(RespuestaConfirmacion.class);
+            var body=respuesta.getBody();
+            if(respuesta.getStatusCode().value()!=202 || body==null || !procesoRemoto.equals(body.reservationProcessId()) ||
+                !"WAITING_FOR_PHONE".equals(body.status()) || body.expiresAt()==null)throw confirmacionIncierta("RESULTADO_CONFIRMACION_DESCONOCIDO");
+            return body;
+        }catch(RestClientResponseException e) {
+            int http=e.getStatusCode().value();String code=null;
+            try{var error=e.getResponseBodyAs(ProblemaHold.class);if(error!=null)code=error.code();}
+            catch(RestClientException | IllegalArgumentException ignored){ /* Sanitizar respuesta externa. */ }
+            String seguro=code==null?"":code;
+            if(http==409 && "RESERVATION_PROCESS_ALREADY_CONFIRMED".equals(seguro))
+                throw confirmacionIncierta("CONFIRMACION_PREVIA_NO_VERIFICADA");
+            boolean rechazo=(http==400 && java.util.Set.of("VALIDATION_ERROR","INVALID_SLOT","EXTERNAL_PATIENT_MISMATCH").contains(seguro)) ||
+                (http==404 && java.util.Set.of("PROFESSIONAL_NOT_FOUND","HOLD_NOT_FOUND","HOLD_EXPIRED").contains(seguro)) ||
+                (http==409 && "SLOT_ALREADY_RESERVED".equals(seguro)) || (http==403 && "HOLD_OWNER_MISMATCH".equals(seguro));
+            if(rechazo)throw new ErrorConfirmacionRemota(false,HttpStatus.valueOf(http),seguro);
+            if(http==401 || http==403)throw new ErrorConfirmacionRemota(false,HttpStatus.SERVICE_UNAVAILABLE,"INTEGRACION_NO_AUTORIZADA");
+            throw confirmacionIncierta("RESULTADO_CONFIRMACION_DESCONOCIDO");
+        }catch(RestClientException e){throw confirmacionIncierta("RESULTADO_CONFIRMACION_DESCONOCIDO");}
+    }
+    private ErrorConfirmacionRemota confirmacionIncierta(String code) {
+        return new ErrorConfirmacionRemota(true,HttpStatus.SERVICE_UNAVAILABLE,code);
     }
     private boolean idValido(String id) { return id!=null && !id.isBlank() && id.length()<=200; }
     private ErrorHoldRemoto incierto() {
