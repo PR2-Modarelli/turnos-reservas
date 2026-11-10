@@ -2,7 +2,7 @@
 
 ## Alcance
 
-Implementa la creación de un hold y la consulta de su proceso por el propietario. La [confirmación inicial REST](CONFIRMACION.md) amplía este flujo. No cancela reservas ni inicia todavía el intercambio de teléfono por Kafka.
+Implementa la creación de un hold y la consulta de su proceso por el propietario. La [confirmación inicial REST](CONFIRMACION.md) amplía este flujo. El [intercambio de teléfono por Kafka](FLUJO_KAFKA.md) continúa el proceso después de la confirmación inicial. La cancelación de reservas sigue pendiente.
 
 El bloqueo de cátedra es autoritativo: consultar disponibilidad antes no garantiza que el turno siga libre. El POST remoto decide el conflicto de manera definitiva. Turnos valida la agenda vigente mediante su API propia de catálogo antes de enviar el POST, sin consultar tablas ni replicar el catálogo.
 

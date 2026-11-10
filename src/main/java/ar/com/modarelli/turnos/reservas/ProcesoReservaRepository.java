@@ -27,7 +27,7 @@ public class ProcesoReservaRepository {
         }
         var activos=jdbc.query("""
             select * from proceso_reserva where usuario_id=? and profesional_id=? and fecha=? and hora_inicio=?
-              and estado in ('CREADO','SOLICITANDO','BLOQUEADO','RESULTADO_DESCONOCIDO','CONFIRMANDO','ESPERANDO_TELEFONO','CONFIRMACION_DESCONOCIDA','CONFIRMACION_RECHAZADA')
+              and estado in ('CREADO','SOLICITANDO','BLOQUEADO','RESULTADO_DESCONOCIDO','CONFIRMANDO','ESPERANDO_TELEFONO','CONFIRMACION_DESCONOCIDA','CONFIRMACION_RECHAZADA','TELEFONO_ENVIADO','CONFIRMADO')
             """,this::mapear,usuario,s.profesionalId(),s.fecha(),s.horaInicio());
         if(!activos.isEmpty())throw new ErrorBloqueo(HttpStatus.CONFLICT,"PROCESO_ACTIVO_EXISTENTE",
             "Ya existe un intento activo para ese turno",activos.getFirst().id());

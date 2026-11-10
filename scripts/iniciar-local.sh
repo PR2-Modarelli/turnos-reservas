@@ -23,4 +23,15 @@ export TURNOS_DB_PASSWORD="${TURNOS_DB_PASSWORD:-}"
 export TURNOS_PORT="${TURNOS_PORT:-8082}"
 export TURNOS_ZONA="${TURNOS_ZONA:-America/Argentina/Mendoza}"
 export CATALOGO_URL="${CATALOGO_URL:-http://localhost:8081}"
+# Los topics y el grupo se obtienen de integration, nunca del JWT del usuario final.
+export TURNOS_KAFKA_ENABLED="${TURNOS_KAFKA_ENABLED:-true}"
+export TURNOS_KAFKA_BOOTSTRAP_SERVERS="${TURNOS_KAFKA_BOOTSTRAP_SERVERS:-${CATALOGO_KAFKA_BOOTSTRAP_SERVERS:-}}"
+grupo_turnos="${TURNOS_KAFKA_GROUP_ID:-}"
+if [[ -z "$grupo_turnos" && "${CATALOGO_KAFKA_CATALOG_TOPIC:-}" == catedra.catalog.* ]]; then
+  grupo_turnos="${CATALOGO_KAFKA_CATALOG_TOPIC#catedra.catalog.}"
+fi
+export TURNOS_KAFKA_GROUP_ID="$grupo_turnos"
+export TURNOS_KAFKA_CONSUMER_GROUP="${TURNOS_KAFKA_CONSUMER_GROUP:-turnos-${grupo_turnos}}"
+export TURNOS_KAFKA_ACTIONS_TOPIC="${TURNOS_KAFKA_ACTIONS_TOPIC:-alumnos.turnos.acciones.${grupo_turnos}}"
+export TURNOS_KAFKA_PHONE_TOPIC="${TURNOS_KAFKA_PHONE_TOPIC:-catedra.turnos.telefono.${grupo_turnos}}"
 exec ./mvnw spring-boot:run

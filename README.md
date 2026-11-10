@@ -1,6 +1,6 @@
 # Turnos y reservas
 
-Servicio Java 21 y Spring Boot para construir disponibilidad consultando el servicio propio de catálogo y las ocupaciones de la cátedra. Puerto local 8082. Incluye registro de usuarios, login con JWT y consulta de cuenta propia. Incluye creación de bloqueos temporales y persistencia de procesos asociados al usuario; la confirmación inicial REST está implementada; el paso de teléfono y el resultado final por Kafka todavía están pendientes.
+Servicio Java 21 y Spring Boot para construir disponibilidad consultando el servicio propio de catálogo y las ocupaciones de la cátedra. Puerto local 8082. Incluye registro de usuarios, login con JWT y consulta de cuenta propia. Incluye creación de bloqueos temporales y persistencia de procesos asociados al usuario; la confirmación inicial REST está implementada; el intercambio de teléfono y el resultado final por Kafka también están implementados; ver [flujo Kafka](docs/FLUJO_KAFKA.md).
 
 ## Requisitos
 
@@ -85,3 +85,5 @@ Para detener PostgreSQL conservando los datos:
 ```bash
 docker compose down
 ```
+
+El envío de teléfono y la consulta de su estado se describen en [flujo Kafka](docs/FLUJO_KAFKA.md). La aceptación REST inicia el proceso; solo el evento final de la cátedra permite marcarlo como CONFIRMADO.

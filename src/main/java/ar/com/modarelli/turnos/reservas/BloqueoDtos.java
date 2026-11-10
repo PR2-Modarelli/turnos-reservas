@@ -8,7 +8,7 @@ public final class BloqueoDtos {
     private BloqueoDtos() {}
     public record Solicitud(@NotNull @Positive Long profesionalId, @NotNull LocalDate fecha,
                             @NotNull LocalTime horaInicio) {}
-    public enum Estado { CREADO, SOLICITANDO, BLOQUEADO, RECHAZADO, RESULTADO_DESCONOCIDO, VENCIDO, CONFIRMANDO, ESPERANDO_TELEFONO, CONFIRMACION_DESCONOCIDA, CONFIRMACION_RECHAZADA }
+    public enum Estado { CREADO, SOLICITANDO, BLOQUEADO, RECHAZADO, RESULTADO_DESCONOCIDO, VENCIDO, CONFIRMANDO, ESPERANDO_TELEFONO, CONFIRMACION_DESCONOCIDA, CONFIRMACION_RECHAZADA, TELEFONO_ENVIADO, CONFIRMADO, PROCESO_INVALIDO }
     public record Proceso(UUID id, long usuarioId, UUID clave, long profesionalId, LocalDate fecha,
                           LocalTime horaInicio, Estado estado, String holdId, String reservationProcessId,
                           Instant expiresAt, String errorCode, Integer errorHttp, Instant creadoEn, Instant actualizadoEn, Instant confirmacionExpiresAt) {
