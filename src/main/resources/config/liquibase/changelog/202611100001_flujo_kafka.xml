@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+<changeSet id="202611100001" author="modarelli"><sql><![CDATA[
+alter table proceso_reserva add column solicitud_telefono_id varchar(200);
+alter table proceso_reserva add column solicitud_telefono_en timestamp with time zone;
+alter table proceso_reserva add column reserva_id bigint;
+alter table proceso_reserva drop constraint proceso_reserva_estado_check;
+alter table proceso_reserva add constraint proceso_reserva_estado_check check (estado in
+ ('CREADO','SOLICITANDO','BLOQUEADO','RECHAZADO','RESULTADO_DESCONOCIDO','VENCIDO','CONFIRMANDO','ESPERANDO_TELEFONO','CONFIRMACION_DESCONOCIDA','CONFIRMACION_RECHAZADA','TELEFONO_ENVIADO','CONFIRMADO','PROCESO_INVALIDO'));
+drop index uk_proceso_usuario_slot_activo;
+create unique index uk_proceso_usuario_slot_activo on proceso_reserva(usuario_id,profesional_id,fecha,hora_inicio)
+ where estado in ('CREADO','SOLICITANDO','BLOQUEADO','RESULTADO_DESCONOCIDO','CONFIRMANDO','ESPERANDO_TELEFONO','CONFIRMACION_DESCONOCIDA','CONFIRMACION_RECHAZADA','TELEFONO_ENVIADO','CONFIRMADO');
+create table evento_turnos_entrada (
+ event_id varchar(200) primary key, proceso_remoto varchar(200) not null, payload text not null,
+ recibido_en timestamp with time zone not null, procesado boolean not null default false, ultimo_intento timestamp with time zone, error varchar(100));
+create index ix_evento_turnos_pendiente on evento_turnos_entrada(recibido_en) where not procesado;
+create table evento_turnos_descartado (topic varchar(249) not null, particion integer not null, posicion bigint not null, payload text, recibido_en timestamp with time zone not null, primary key(topic,particion,posicion));
+create table telefono_salida (
+ event_id uuid primary key, proceso_id uuid not null references proceso_reserva(id) on delete cascade,
+ clave uuid not null, telefono varchar(16) not null, payload text not null,
+ creado_en timestamp with time zone not null, publicado_en timestamp with time zone,
+ cancelado boolean not null default false, unique(proceso_id,clave));
+create index ix_telefono_salida_pendiente on telefono_salida(creado_en) where publicado_en is null and not cancelado;
+]]></sql></changeSet></databaseChangeLog>

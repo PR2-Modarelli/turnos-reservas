@@ -53,7 +53,7 @@ public class ConfirmacionServicio {
     }
     private Vista resultado(Proceso p) {
         return switch(p.estado()) {
-            case CONFIRMANDO,ESPERANDO_TELEFONO,CONFIRMACION_DESCONOCIDA -> p.vista();
+            case CONFIRMANDO,ESPERANDO_TELEFONO,CONFIRMACION_DESCONOCIDA,TELEFONO_ENVIADO,CONFIRMADO,PROCESO_INVALIDO -> p.vista();
             case CONFIRMACION_RECHAZADA -> throw new ErrorBloqueo(HttpStatus.valueOf(p.errorHttp()),p.errorCode(),"La confirmacion inicial fue rechazada",p.id());
             case VENCIDO -> throw new ErrorBloqueo(HttpStatus.CONFLICT,"HOLD_EXPIRED","El bloqueo esta vencido",p.id());
             default -> throw new ErrorBloqueo(HttpStatus.CONFLICT,"ESTADO_NO_CONFIRMABLE","El proceso no tiene un bloqueo confirmado localmente",p.id());

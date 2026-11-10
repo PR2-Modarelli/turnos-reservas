@@ -25,3 +25,10 @@ turnos:
   catalogo-url: ${CATALOGO_URL:http://localhost:8081}
   catedra-url: ${CATEDRA_BASE_URL:}
   catedra-token: ${CATEDRA_TOKEN:}
+  kafka:
+    enabled: ${TURNOS_KAFKA_ENABLED:false}
+    bootstrap-servers: ${TURNOS_KAFKA_BOOTSTRAP_SERVERS:}
+    group-id: ${TURNOS_KAFKA_GROUP_ID:}
+    consumer-group: ${TURNOS_KAFKA_CONSUMER_GROUP:}
+    actions-topic: ${TURNOS_KAFKA_ACTIONS_TOPIC:}
+    phone-topic: ${TURNOS_KAFKA_PHONE_TOPIC:}

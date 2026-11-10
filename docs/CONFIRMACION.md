@@ -2,7 +2,7 @@
 
 ## Alcance
 
-Permite que el propietario de un hold vigente inicie la confirmación con cátedra. Una respuesta REST aceptada significa `WAITING_FOR_PHONE`, representado localmente como `ESPERANDO_TELEFONO`. **No es una reserva confirmada definitivamente.** El intercambio de teléfono y los resultados finales por Kafka se implementarán en otro bloque.
+Permite que el propietario de un hold vigente inicie la confirmación con cátedra. Una respuesta REST aceptada significa `WAITING_FOR_PHONE`, representado localmente como `ESPERANDO_TELEFONO`. **No es una reserva confirmada definitivamente.** El [intercambio de teléfono y los resultados finales por Kafka](FLUJO_KAFKA.md) continúa este flujo.
 
 ## POST /api/turnos/procesos/{id}/confirmacion
 
@@ -66,7 +66,7 @@ Conexión 3 segundos, lectura 5 segundos, sin reintento automático del POST. Un
 
 CONFIRMANDO sin avance durante 30 segundos pasa a CONFIRMACION_DESCONOCIDA al consultar/iniciar operaciones. Es un umbral local para detectar un intento interrumpido, no el TTL de la reserva. Una respuesta tardía del intento original puede resolver la incertidumbre. No se vuelve a enviar por repetir el endpoint ni por reiniciar la aplicación.
 
-Si falla PostgreSQL después del 202 remoto, el intento CONFIRMANDO ya está persistido. Se devuelve 503 con `procesoId`, sin deshacer la operación externa ni reenviarla. La reconciliación con el listado de reservas y los eventos Kafka se completará en los bloques siguientes; no se afirma que esta issue ya recupere todos los resultados remotos perdidos.
+Si falla PostgreSQL después del 202 remoto, el intento CONFIRMANDO ya está persistido. Se devuelve 503 con `procesoId`, sin deshacer la operación externa ni reenviarla. Los eventos Kafka correlacionables permiten avanzar el proceso incluso si se pierde la respuesta REST. La reconciliación general con el listado de reservas sigue pendiente; no se afirma que este flujo recupere todos los resultados remotos perdidos.
 
 ESPERANDO_TELEFONO es el último estado observado por REST. Aunque se alcance su vencimiento, este módulo no inventa un resultado final; se necesitará observar cátedra/Kafka para concluir confirmación, rechazo o expiración.
 
@@ -92,3 +92,7 @@ Los rechazos contractuales definitivos conservan su HTTP/código: 400 VALIDATION
 `ConfirmacionHttpTest` usa PostgreSQL Testcontainers, reloj controlado y servidores HTTP locales. Cubre aceptación sin afirmación de resultado final, identidad de paciente, propietarios, vencimientos, agenda, concurrencia, repeticiones, rechazo remoto, respuestas incompletas/ajenas, timeout real, pérdida de respuesta, interrupción durable y fallo al guardar la aceptación. No confirma holds reales en cátedra.
 
 Ejecutar `./mvnw test`. Para empaquetar el JAR sin repetir una suite ya ejecutada sobre el mismo código, `./mvnw -DskipTests package`.
+
+## Continuación por Kafka
+
+El [flujo de teléfono y resultado final](FLUJO_KAFKA.md) amplía esta etapa. Una solicitud o resultado recibido durante la llamada REST se conserva y no se sobrescribe al guardar su respuesta. La repetición de confirmación devuelve también TELEFONO_ENVIADO, CONFIRMADO o PROCESO_INVALIDO cuando el proceso ya avanzó.
