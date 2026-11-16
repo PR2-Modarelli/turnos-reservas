@@ -87,3 +87,9 @@ docker compose down
 ```
 
 El envío de teléfono y la consulta de su estado se describen en [flujo Kafka](docs/FLUJO_KAFKA.md). La aceptación REST inicia el proceso; solo el evento final de la cátedra permite marcarlo como CONFIRMADO.
+
+La [consulta y cancelación de reservas propias](docs/RESERVAS.md) permite listar, consultar detalle y cancelar por usuario autenticado. El estado se verifica en la cátedra y las cancelaciones se conservan por REST y por Kafka.
+
+## Organización del código
+
+El servicio utiliza puertos y adaptadores, con `domain`, `application` e `infrastructure`, siguiendo el ejemplo de la cátedra. Ver [arquitectura y recorrido de los casos de uso](docs/ARQUITECTURA.md). Las reglas de arquitectura se verifican con ArchUnit.
