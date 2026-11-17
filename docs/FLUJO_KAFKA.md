@@ -28,8 +28,9 @@ No cambiar el consumer group en cada arranque: se perdería la continuidad de lo
 | `AppointmentConfirmed` | Valida proceso, hold, solicitud, profesional, fecha y hora; guarda `reservationId` y estado `CONFIRMADO`. |
 | `AppointmentProcessExpired` | Guarda `VENCIDO` y cancela envíos pendientes. |
 | `AppointmentProcessInvalid` | Guarda `PROCESO_INVALIDO` y cancela envíos pendientes. |
+| `AppointmentCancelled` | Valida la reserva y guarda `CANCELADO`; continúa el flujo de [cancelación](RESERVAS.md). |
 
-Un resultado terminal no retrocede por eventos tardíos. No se considera una publicación de teléfono como una reserva confirmada. El vencimiento local impide publicar fuera de plazo, pero el resultado final se obtiene del evento de la cátedra.
+Un resultado terminal no retrocede por eventos tardíos. CONFIRMADO puede avanzar a CANCELADO mediante una cancelación válida. No se considera una publicación de teléfono como una reserva confirmada. El vencimiento local impide publicar fuera de plazo, pero el resultado final se obtiene del evento de la cátedra.
 
 La recepción guarda primero el evento en `evento_turnos_entrada` y aplica la transición en la misma transacción. El offset se confirma después del commit. Los eventos que llegan antes de guardar el hold o antes de recibir la solicitud quedan pendientes y se reprocesan periódicamente. Una solicitud ya correlacionada no se reemplaza por otra distinta.
 
