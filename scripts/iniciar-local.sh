@@ -34,4 +34,5 @@ export TURNOS_KAFKA_GROUP_ID="$grupo_turnos"
 export TURNOS_KAFKA_CONSUMER_GROUP="${TURNOS_KAFKA_CONSUMER_GROUP:-turnos-${grupo_turnos}}"
 export TURNOS_KAFKA_ACTIONS_TOPIC="${TURNOS_KAFKA_ACTIONS_TOPIC:-alumnos.turnos.acciones.${grupo_turnos}}"
 export TURNOS_KAFKA_PHONE_TOPIC="${TURNOS_KAFKA_PHONE_TOPIC:-catedra.turnos.telefono.${grupo_turnos}}"
+export TURNOS_RECUPERACION_ENABLED="${TURNOS_RECUPERACION_ENABLED:-true}"
 exec ./mvnw spring-boot:run

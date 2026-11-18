@@ -473,7 +473,7 @@ class ReservasHttpTest {
     void guardadoFallidoDespuesDelExitoSeRecuperaPorConsulta() throws Exception {
         jdbc.execute(
                 "alter table proceso_reserva add constraint fallo_cancel_fixture check(cancelado_en"
-                    + " is null)");
+                        + " is null)");
         try {
             assertThat(cancelar(token, "").statusCode()).isEqualTo(503);
             assertThat(estado()).isEqualTo("CANCELANDO");
@@ -488,6 +488,7 @@ class ReservasHttpTest {
 
     @Test
     void resultadoFailedActualizaProceso() throws Exception {
+        pendiente("TELEFONO_ENVIADO");
         lista = json.writeValueAsString(List.of(reserva("FAILED")));
         assertThat(get(token, "/process-fixture").statusCode()).isEqualTo(200);
         assertThat(estado()).isEqualTo("PROCESO_INVALIDO");
@@ -523,5 +524,180 @@ class ReservasHttpTest {
         lista = json.writeValueAsString(List.of(m));
         assertThat(get(token, "/process-fixture").statusCode()).isEqualTo(502);
         assertThat(cancelaciones.get()).isZero();
+    }
+
+    @Autowired ar.com.modarelli.turnos.domain.ports.in.RecuperacionUseCase recuperacion;
+
+    void pendiente(String estado) {
+        jdbc.update(
+                "update proceso_reserva set estado=?,actualizado_en=? where id=?",
+                estado,
+                Timestamp.from(AHORA.minusSeconds(120)),
+                id);
+    }
+
+    @Test
+    void recuperaConfirmacionPerdidaSinReenviar() {
+        pendiente("CONFIRMACION_DESCONOCIDA");
+        recuperacion.recuperar();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select estado from proceso_reserva where id=?", String.class, id))
+                .isEqualTo("CONFIRMADO");
+        assertThat(cancelaciones.get()).isZero();
+        assertThat(query.get()).contains(paciente);
+    }
+
+    @Test
+    void recuperaCancelacionPerdidaConFechaOriginal() {
+        pendiente("CANCELACION_DESCONOCIDA");
+        lista = json.writeValueAsString(List.of(reserva("CANCELLED")));
+        recuperacion.recuperar();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select estado from proceso_reserva where id=?", String.class, id))
+                .isEqualTo("CANCELADO");
+        assertThat(cancelaciones.get()).isZero();
+    }
+
+    @Test
+    void ausenciaNoEquivaleARechazo() {
+        pendiente("CONFIRMACION_DESCONOCIDA");
+        lista = "[]";
+        total = "0";
+        recuperacion.recuperar();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select estado from proceso_reserva where id=?", String.class, id))
+                .isEqualTo("CONFIRMACION_DESCONOCIDA");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select recuperacion_resultado from proceso_reserva where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("NO_VERIFICABLE");
+    }
+
+    @Test
+    void noInventaIdentificadorDeBloqueoPerdido() {
+        pendiente("RESULTADO_DESCONOCIDO");
+        jdbc.update(
+                "update proceso_reserva set reservation_process_id=null,hold_id=null where id=?",
+                id);
+        recuperacion.recuperar();
+        assertThat(listados.get()).isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select estado from proceso_reserva where id=?", String.class, id))
+                .isEqualTo("RESULTADO_DESCONOCIDO");
+    }
+
+    @Test
+    void falloPermiteOtroIntentoTrasReinicioPeroRespetaEspera() {
+        pendiente("CONFIRMACION_DESCONOCIDA");
+        statusLista = 503;
+        recuperacion.recuperar();
+        recuperacion.recuperar();
+        assertThat(listados.get()).isEqualTo(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select recuperacion_resultado from proceso_reserva where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("CONSULTA_FALLIDA");
+        jdbc.update(
+                "update proceso_reserva set recuperacion_en=? where id=?",
+                Timestamp.from(AHORA.minusSeconds(61)),
+                id);
+        statusLista = 200;
+        recuperacion.recuperar();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select estado from proceso_reserva where id=?", String.class, id))
+                .isEqualTo("CONFIRMADO");
+    }
+
+    @Test
+    void noConsultaProcesosFinalizados() {
+        recuperacion.recuperar();
+        assertThat(listados.get()).isZero();
+    }
+
+    @Test
+    void phonePendingEsperaCorrelacionKafkaSinInventarla() {
+        pendiente("CONFIRMACION_DESCONOCIDA");
+        jdbc.update("update proceso_reserva set solicitud_telefono_id=null where id=?", id);
+        lista = json.writeValueAsString(List.of(reserva("PHONE_PENDING")));
+        recuperacion.recuperar();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select estado from proceso_reserva where id=?", String.class, id))
+                .isEqualTo("CONFIRMACION_DESCONOCIDA");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select solicitud_telefono_id from proceso_reserva where id=?",
+                                String.class,
+                                id))
+                .isNull();
+    }
+
+    @Test
+    void lecturaFallidaNoHaceRetrocederConfirmadoPorKafka() throws Exception {
+        lista = json.writeValueAsString(List.of(reserva("FAILED")));
+        get(token, "");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select estado from proceso_reserva where id=?", String.class, id))
+                .isEqualTo("CONFIRMADO");
+    }
+
+    @Test
+    void recuperaConfirmacionInterrumpidaDuranteReinicio() {
+        pendiente("CONFIRMANDO");
+        recuperacion.recuperar();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select estado from proceso_reserva where id=?", String.class, id))
+                .isEqualTo("CONFIRMADO");
+    }
+
+    @Test
+    void limitaPaginacionSinSuponerFracaso() {
+        pendiente("CONFIRMACION_DESCONOCIDA");
+        lista = lista.replace("process-fixture", "process-otra-reserva");
+        total = "1001";
+        recuperacion.recuperar();
+        assertThat(listados.get()).isEqualTo(10);
+        assertThat(estado()).isEqualTo("CONFIRMACION_DESCONOCIDA");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select recuperacion_resultado from proceso_reserva where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("LIMITE_CONSULTA");
+    }
+
+    @Test
+    void vencimientoDelHoldNoCierraConfirmacionIncierta() {
+        pendiente("CONFIRMACION_DESCONOCIDA");
+        lista = "[]";
+        total = "0";
+        jdbc.update(
+                "update proceso_reserva set vence_en=? where id=?",
+                Timestamp.from(AHORA.minusSeconds(1)),
+                id);
+        recuperacion.recuperar();
+        assertThat(estado()).isEqualTo("CONFIRMACION_DESCONOCIDA");
+    }
+
+    @Test
+    void envioInterrumpidoSinRespuestaPermaneceDesconocido() {
+        pendiente("SOLICITANDO");
+        jdbc.update(
+                "update proceso_reserva set reservation_process_id=null,hold_id=null where id=?",
+                id);
+        recuperacion.recuperar();
+        assertThat(estado()).isEqualTo("RESULTADO_DESCONOCIDO");
+        assertThat(listados.get()).isZero();
     }
 }

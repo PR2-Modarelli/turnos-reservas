@@ -93,3 +93,6 @@ La [consulta y cancelación de reservas propias](docs/RESERVAS.md) permite lista
 ## Organización del código
 
 El servicio utiliza puertos y adaptadores, con `domain`, `application` e `infrastructure`, siguiendo el ejemplo de la cátedra. Ver [arquitectura y recorrido de los casos de uso](docs/ARQUITECTURA.md). Las reglas de arquitectura se verifican con ArchUnit.
+
+La recuperación automática de procesos pendientes, sus límites y diagnóstico se
+describen en [docs/RECUPERACION.md](docs/RECUPERACION.md).

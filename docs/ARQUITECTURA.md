@@ -54,3 +54,10 @@ Las pruebas funcionales e integración siguen verificando el comportamiento púb
 Los modelos de entrada web de registro, login y bloqueo están separados de los modelos puros. Las consultas SQL y la conversión entre valores JDBC y modelos propios están en adaptadores. El estado durable, las transacciones cortas y las operaciones HTTP fuera de las transacciones conservan el comportamiento anterior.
 
 Las interfaces `Gateway` describen contratos de integración; los objetos que intercambian no llevan anotaciones de Jackson. El adaptador HTTP y el codec de Kafka configuran la compatibilidad con campos adicionales del contrato externo.
+
+La recuperación periódica entra por `RecuperacionUseCase`, implementado por
+`RecuperacionServicio`. `RecuperacionPort` selecciona procesos y conserva el
+último intento mediante `RecuperacionRepository`. `ReservasGateway` consulta la
+cátedra y `ReservasPort` aplica evidencia validada bajo bloqueo de fila.
+`RecuperacionProgramada` únicamente adapta el reloj de ejecución de Spring.
+Los límites y la configuración están en [RECUPERACION.md](RECUPERACION.md).
