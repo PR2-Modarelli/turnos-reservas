@@ -26,7 +26,7 @@ public class ReservasRepository implements ReservasPort {
         return jdbc
                 .queryForList(
                         "select * from proceso_reserva where reservation_process_id=? and"
-                            + " usuario_id=?",
+                                + " usuario_id=?",
                         remoto,
                         usuario)
                 .stream()
@@ -78,7 +78,7 @@ public class ReservasRepository implements ReservasPort {
                     "update proceso_reserva set"
                         + " estado='PROCESO_INVALIDO',reserva_id=?,error_code='RESERVA_FALLIDA',error_http=null,actualizado_en=?"
                         + " where id=? and estado not in"
-                        + " ('CANCELADO','CANCELANDO','CANCELACION_DESCONOCIDA')",
+                        + " ('CANCELADO','CONFIRMADO','VENCIDO','PROCESO_INVALIDO','CANCELANDO','CANCELACION_DESCONOCIDA')",
                     r.reservationId(),
                     Timestamp.from(ahora),
                     p.get("id"));
@@ -87,7 +87,7 @@ public class ReservasRepository implements ReservasPort {
                     "update proceso_reserva set"
                         + " estado='CONFIRMADO',reserva_id=?,error_code=null,error_http=null,actualizado_en=?"
                         + " where id=? and estado not in"
-                        + " ('CANCELADO','CANCELANDO','CANCELACION_DESCONOCIDA')",
+                        + " ('CANCELADO','VENCIDO','PROCESO_INVALIDO','CANCELANDO','CANCELACION_DESCONOCIDA')",
                     r.reservationId(),
                     Timestamp.from(ahora),
                     p.get("id"));
@@ -97,7 +97,7 @@ public class ReservasRepository implements ReservasPort {
     public boolean preparar(String remoto, long usuario, String motivo, Instant ahora) {
         jdbc.queryForList(
                 "select id from proceso_reserva where reservation_process_id=? and usuario_id=? for"
-                    + " update",
+                        + " update",
                 remoto,
                 usuario);
         var p = propioFila(remoto, usuario);
@@ -144,7 +144,7 @@ public class ReservasRepository implements ReservasPort {
     public void fallo(String remoto, boolean incierto, String code, int http, Instant ahora) {
         jdbc.update(
                 "update proceso_reserva set estado=?,error_code=?,error_http=?,actualizado_en=?"
-                    + " where reservation_process_id=? and estado='CANCELANDO'",
+                        + " where reservation_process_id=? and estado='CANCELANDO'",
                 incierto ? "CANCELACION_DESCONOCIDA" : "CONFIRMADO",
                 code,
                 http,

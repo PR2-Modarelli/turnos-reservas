@@ -6,4 +6,5 @@
  <include file="config/liquibase/changelog/202611080001_confirmacion_inicial.xml"/>
  <include file="config/liquibase/changelog/202611100001_flujo_kafka.xml"/>
  <include file="config/liquibase/changelog/202611100002_cancelacion.xml"/>
+ <include file="config/liquibase/changelog/202611170001_recuperacion.xml"/>
 </databaseChangeLog>
