@@ -96,3 +96,6 @@ El servicio utiliza puertos y adaptadores, con `domain`, `application` e `infras
 
 La recuperación automática de procesos pendientes, sus límites y diagnóstico se
 describen en [docs/RECUPERACION.md](docs/RECUPERACION.md).
+
+Para levantar ambos backends, sus bases separadas y HTTPS en contenedores, ver
+[despliegue con Docker Compose](deploy/README.md). Usa puertos y volúmenes propios.
