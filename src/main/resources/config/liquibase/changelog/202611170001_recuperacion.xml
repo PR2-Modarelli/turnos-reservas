@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="202611170001" author="modarelli"><sql>
+ ALTER TABLE proceso_reserva ADD COLUMN recuperacion_en TIMESTAMPTZ;
+ ALTER TABLE proceso_reserva ADD COLUMN recuperacion_resultado VARCHAR(40);
+ </sql></changeSet>
+</databaseChangeLog>
