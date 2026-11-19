@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+<changeSet id="202611180001" author="modarelli"><sql>
+ALTER TABLE proceso_reserva ADD COLUMN recuperacion_intentos INTEGER NOT NULL DEFAULT 0 CHECK (recuperacion_intentos >= 0);
+ALTER TABLE proceso_reserva ADD COLUMN recuperacion_proxima TIMESTAMPTZ;
+ALTER TABLE proceso_reserva ADD COLUMN requiere_revision BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE evento_turnos_entrada ADD COLUMN intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0);
+ALTER TABLE evento_turnos_entrada ADD COLUMN proximo_intento TIMESTAMPTZ;
+ALTER TABLE evento_turnos_entrada ADD COLUMN requiere_revision BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE evento_turnos_entrada ADD COLUMN correlacion_revision TIMESTAMPTZ;
+ALTER TABLE proceso_reserva DROP CONSTRAINT proceso_reserva_estado_check;
+ALTER TABLE proceso_reserva ADD CONSTRAINT proceso_reserva_estado_check CHECK (estado in
+('ABANDONADO_LOCAL','CREADO','SOLICITANDO','BLOQUEADO','RECHAZADO','RESULTADO_DESCONOCIDO','VENCIDO','CONFIRMANDO','ESPERANDO_TELEFONO','CONFIRMACION_DESCONOCIDA','CONFIRMACION_RECHAZADA','TELEFONO_ENVIADO','CONFIRMADO','PROCESO_INVALIDO','CANCELANDO','CANCELACION_DESCONOCIDA','CANCELADO'));
+</sql></changeSet>
+</databaseChangeLog>

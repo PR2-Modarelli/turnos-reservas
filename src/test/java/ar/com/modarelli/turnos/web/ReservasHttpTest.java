@@ -606,7 +606,7 @@ class ReservasHttpTest {
                                 id))
                 .isEqualTo("CONSULTA_FALLIDA");
         jdbc.update(
-                "update proceso_reserva set recuperacion_en=? where id=?",
+                "update proceso_reserva set recuperacion_proxima=? where id=?",
                 Timestamp.from(AHORA.minusSeconds(61)),
                 id);
         statusLista = 200;
@@ -699,5 +699,147 @@ class ReservasHttpTest {
         recuperacion.recuperar();
         assertThat(estado()).isEqualTo("RESULTADO_DESCONOCIDO");
         assertThat(listados.get()).isZero();
+    }
+
+    @Test
+    void limitaIntentosPersisteEsperaYSuspendeSinInventarResultado() {
+        pendiente("CONFIRMACION_DESCONOCIDA");
+        statusLista = 503;
+        for (int intento = 1; intento <= 6; intento++) {
+            recuperacion.recuperar();
+            assertThat(listados.get()).isEqualTo(intento);
+            assertThat(
+                            jdbc.queryForObject(
+                                    "select recuperacion_intentos from proceso_reserva where id=?",
+                                    Integer.class,
+                                    id))
+                    .isEqualTo(intento);
+            assertThat(
+                            jdbc.queryForObject(
+                                            "select recuperacion_proxima from proceso_reserva where"
+                                                    + " id=?",
+                                            Timestamp.class,
+                                            id)
+                                    .toInstant())
+                    .isEqualTo(AHORA.plusSeconds(60L << (intento - 1)));
+            recuperacion.recuperar();
+            assertThat(listados.get()).isEqualTo(intento);
+            if (intento < 6)
+                jdbc.update(
+                        "update proceso_reserva set recuperacion_proxima=? where id=?",
+                        Timestamp.from(AHORA.minusSeconds(1)),
+                        id);
+        }
+        assertThat(
+                        jdbc.queryForObject(
+                                "select requiere_revision from proceso_reserva where id=?",
+                                Boolean.class,
+                                id))
+                .isTrue();
+        jdbc.update(
+                "update proceso_reserva set recuperacion_proxima=? where id=?",
+                Timestamp.from(AHORA.minusSeconds(1)),
+                id);
+        recuperacion.recuperar();
+        assertThat(listados.get()).isEqualTo(6);
+        assertThat(estado()).isEqualTo("CONFIRMACION_DESCONOCIDA");
+        assertThat(cancelaciones.get()).isZero();
+    }
+
+    @Test
+    void sinIdentificadoresPasaARevisionSinConsultarLaRed() {
+        pendiente("RESULTADO_DESCONOCIDO");
+        jdbc.update(
+                "update proceso_reserva set"
+                    + " hold_id=null,reservation_process_id=null,reserva_id=null,solicitud_telefono_id=null"
+                    + " where id=?",
+                id);
+        recuperacion.recuperar();
+        recuperacion.recuperar();
+        assertThat(listados.get()).isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select requiere_revision from proceso_reserva where id=?",
+                                Boolean.class,
+                                id))
+                .isTrue();
+        assertThat(estado()).isEqualTo("RESULTADO_DESCONOCIDO");
+    }
+
+    HttpResponse<String> abandonar(String t) throws Exception {
+        var request =
+                HttpRequest.newBuilder(
+                        URI.create(
+                                "http://localhost:"
+                                        + puerto
+                                        + "/api/turnos/procesos/"
+                                        + id
+                                        + "/abandono-local"));
+        if (t != null) request.header("Authorization", "Bearer " + t);
+        return http.send(
+                request.POST(HttpRequest.BodyPublishers.noBody()).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void abandonoLocalExigePropietarioYNoCancelaRemotamente() throws Exception {
+        pendiente("RESULTADO_DESCONOCIDO");
+        jdbc.update(
+                "update proceso_reserva set"
+                    + " hold_id=null,reservation_process_id=null,reserva_id=null,solicitud_telefono_id=null"
+                    + " where id=?",
+                id);
+        recuperacion.recuperar();
+        assertThat(abandonar(null).statusCode()).isEqualTo(401);
+        assertThat(abandonar(otroToken).statusCode()).isEqualTo(409);
+        assertThat(abandonar(token).statusCode()).isEqualTo(204);
+        assertThat(abandonar(token).statusCode()).isEqualTo(204);
+        assertThat(estado()).isEqualTo("ABANDONADO_LOCAL");
+        assertThat(cancelaciones.get()).isZero();
+        assertThat(listados.get()).isZero();
+    }
+
+    @Test
+    void noPermiteAbandonarUnaConfirmacionIncierta() throws Exception {
+        pendiente("CONFIRMACION_DESCONOCIDA");
+        jdbc.update("update proceso_reserva set requiere_revision=true where id=?", id);
+        assertThat(abandonar(token).statusCode()).isEqualTo(409);
+        assertThat(estado()).isEqualTo("CONFIRMACION_DESCONOCIDA");
+    }
+
+    @Autowired ar.com.modarelli.turnos.domain.ports.out.ProcesoReservaPort procesosPrueba;
+
+    @Test
+    void respuestaHoldTardiaNoReactivaIntentoAbandonado() throws Exception {
+        pendiente("RESULTADO_DESCONOCIDO");
+        jdbc.update(
+                "update proceso_reserva set"
+                    + " hold_id=null,reservation_process_id=null,reserva_id=null,solicitud_telefono_id=null"
+                    + " where id=?",
+                id);
+        recuperacion.recuperar();
+        assertThat(abandonar(token).statusCode()).isEqualTo(204);
+        procesosPrueba.guardarHold(
+                id, "hold-tardio", "process-tardio", AHORA.plusSeconds(600), AHORA);
+        assertThat(estado()).isEqualTo("ABANDONADO_LOCAL");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select hold_id from proceso_reserva where id=?", String.class, id))
+                .isEqualTo("hold-tardio");
+    }
+
+    @Autowired ar.com.modarelli.turnos.domain.ports.out.RecuperacionPort recuperacionDatos;
+
+    @Test
+    void dosTrabajadoresNoReclamanElMismoIntento() {
+        pendiente("CONFIRMACION_DESCONOCIDA");
+        assertThat(recuperacionDatos.iniciar(id, AHORA)).isTrue();
+        assertThat(recuperacionDatos.iniciar(id, AHORA)).isFalse();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select recuperacion_intentos from proceso_reserva where id=?",
+                                Integer.class,
+                                id))
+                .isEqualTo(1);
     }
 }

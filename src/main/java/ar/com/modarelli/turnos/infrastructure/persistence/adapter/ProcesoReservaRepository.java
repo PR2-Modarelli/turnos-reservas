@@ -106,7 +106,7 @@ insert into proceso_reserva(id,usuario_id,idempotency_key,profesional_id,fecha,h
     public boolean marcarEnvio(UUID id, Instant ahora) {
         return jdbc.update(
                         "update proceso_reserva set estado='SOLICITANDO',actualizado_en=? where"
-                            + " id=? and estado='CREADO'",
+                                + " id=? and estado='CREADO'",
                         Timestamp.from(ahora),
                         id)
                 == 1;
@@ -137,8 +137,8 @@ update proceso_reserva set estado='RESULTADO_DESCONOCIDO',error_code='RESULTADO_
     public void guardarHold(UUID id, String holdId, String remoto, Instant vence, Instant ahora) {
         jdbc.update(
                 """
-update proceso_reserva set estado=?,hold_id=?,reservation_process_id=?,vence_en=?,error_code=null,error_http=null,actualizado_en=?
- where id=? and estado in ('SOLICITANDO','RESULTADO_DESCONOCIDO')
+update proceso_reserva set estado=case when estado='ABANDONADO_LOCAL' then estado else ? end,hold_id=?,reservation_process_id=?,vence_en=?,error_code=null,error_http=null,actualizado_en=?
+ where id=? and estado in ('SOLICITANDO','RESULTADO_DESCONOCIDO','ABANDONADO_LOCAL')
 """,
                 vence.isAfter(ahora) ? "BLOQUEADO" : "VENCIDO",
                 holdId,
@@ -154,7 +154,7 @@ update proceso_reserva set estado=?,hold_id=?,reservation_process_id=?,vence_en=
                 jdbc
                         .query(
                                 "select * from proceso_reserva where id=? and usuario_id=? for"
-                                    + " update",
+                                        + " update",
                                 this::mapear,
                                 id,
                                 usuario)

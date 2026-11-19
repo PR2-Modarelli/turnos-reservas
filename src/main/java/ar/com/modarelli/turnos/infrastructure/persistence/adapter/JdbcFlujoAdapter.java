@@ -14,8 +14,16 @@ import java.util.*;
 public class JdbcFlujoAdapter implements FlujoPersistenciaPort {
     private final JdbcTemplate jdbc;
 
-    public JdbcFlujoAdapter(JdbcTemplate jdbc) {
+    private final ar.com.modarelli.turnos.infrastructure.config.LimitesRecuperacion limites;
+    private final Clock clock;
+
+    public JdbcFlujoAdapter(
+            JdbcTemplate jdbc,
+            ar.com.modarelli.turnos.infrastructure.config.LimitesRecuperacion limites,
+            Clock clock) {
         this.jdbc = jdbc;
+        this.limites = limites;
+        this.clock = clock;
     }
 
     private int actualizar(String sql, Object... valores) {
@@ -50,7 +58,7 @@ public class JdbcFlujoAdapter implements FlujoPersistenciaPort {
     public List<String> entradaPendiente(String id) {
         return jdbc.queryForList(
                 "select payload from evento_turnos_entrada where event_id=? and not procesado for"
-                    + " update",
+                        + " update",
                 String.class,
                 id);
     }
@@ -58,7 +66,7 @@ public class JdbcFlujoAdapter implements FlujoPersistenciaPort {
     public List<ProcesoFlujo> porCorrelacion(String proceso, String hold) {
         return jdbc.query(
                 "select * from proceso_reserva where reservation_process_id=? and hold_id=? for"
-                    + " update",
+                        + " update",
                 this::mapear,
                 proceso,
                 hold);
@@ -82,9 +90,25 @@ public class JdbcFlujoAdapter implements FlujoPersistenciaPort {
 
     public List<String> entradasPendientes() {
         return jdbc.queryForList(
-                "select event_id from evento_turnos_entrada where not procesado order by"
-                    + " coalesce(ultimo_intento,recibido_en),event_id limit 100",
-                String.class);
+                """
+select e.event_id from evento_turnos_entrada e where not e.procesado and
+((not e.requiere_revision and (e.proximo_intento is null or e.proximo_intento<=?))
+or exists (select 1 from proceso_reserva p where p.reservation_process_id=e.proceso_remoto
+and p.actualizado_en > coalesce(e.correlacion_revision, '-infinity'::timestamptz)))
+order by coalesce(e.ultimo_intento,e.recibido_en),e.event_id limit 100
+""",
+                String.class,
+                Timestamp.from(clock.instant()));
+    }
+
+    public Map<String, Object> recuperacion(UUID id) {
+        return jdbc.queryForMap(
+                "select recuperacion_intentos as intentos, recuperacion_proxima as proxima,"
+                    + " (requiere_revision and estado in"
+                    + " ('RESULTADO_DESCONOCIDO','CONFIRMACION_DESCONOCIDA','ESPERANDO_TELEFONO','TELEFONO_ENVIADO','CANCELACION_DESCONOCIDA'))"
+                    + " as revision, recuperacion_resultado as resultado from proceso_reserva where"
+                    + " id=?",
+                id);
     }
 
     public void cancelarVencidos(Instant ahora) {
@@ -117,7 +141,7 @@ public class JdbcFlujoAdapter implements FlujoPersistenciaPort {
             String topic, int particion, long posicion, String payload, Instant ahora) {
         actualizar(
                 "insert into evento_turnos_descartado(topic,particion,posicion,payload,recibido_en)"
-                    + " values(?,?,?,?,?) on conflict do nothing",
+                        + " values(?,?,?,?,?) on conflict do nothing",
                 topic,
                 particion,
                 posicion,
@@ -128,7 +152,7 @@ public class JdbcFlujoAdapter implements FlujoPersistenciaPort {
     public int registrarEntrada(String p0, String p1, String p2, Instant p3) {
         return actualizar(
                 "insert into evento_turnos_entrada(event_id,proceso_remoto,payload,recibido_en)"
-                    + " values(?,?,?,?) on conflict do nothing",
+                        + " values(?,?,?,?) on conflict do nothing",
                 p0,
                 p1,
                 p2,
@@ -137,18 +161,32 @@ public class JdbcFlujoAdapter implements FlujoPersistenciaPort {
 
     public int marcarIntento(Instant p0, String p1) {
         return actualizar(
-                "update evento_turnos_entrada set ultimo_intento=? where event_id=?", p0, p1);
+                """
+update evento_turnos_entrada e set ultimo_intento=?,intentos=intentos+1,
+proximo_intento=cast(? as timestamptz) + make_interval(secs => least(3600.0, ? * power(2.0, least(intentos,10)))),
+requiere_revision=(intentos+1>=?),
+correlacion_revision=(select max(p.actualizado_en) from proceso_reserva p where p.reservation_process_id=e.proceso_remoto)
+where event_id=?
+""",
+                p0,
+                p0,
+                limites.esperaSegundos,
+                limites.maxIntentos,
+                p1);
     }
 
     public int marcarProcesado(String p0, String p1) {
         return actualizar(
-                "update evento_turnos_entrada set procesado=true,error=? where event_id=?", p0, p1);
+                "update evento_turnos_entrada set procesado=true,requiere_revision=false,error=?"
+                        + " where event_id=?",
+                p0,
+                p1);
     }
 
     public int guardarCancelacion(Long p0, Instant p1, String p2, Instant p3, UUID p4) {
         return actualizar(
                 "update proceso_reserva set"
-                    + " estado='CANCELADO',reserva_id=?,cancelado_en=?,motivo_cancelacion=?,error_code=null,error_http=null,actualizado_en=?"
+                    + " requiere_revision=false,estado='CANCELADO',reserva_id=?,cancelado_en=?,motivo_cancelacion=?,error_code=null,error_http=null,actualizado_en=?"
                     + " where id=?",
                 p0,
                 p1,
@@ -160,14 +198,14 @@ public class JdbcFlujoAdapter implements FlujoPersistenciaPort {
     public int cancelarSalidas(UUID p0) {
         return actualizar(
                 "update telefono_salida set cancelado=true where proceso_id=? and publicado_en is"
-                    + " null",
+                        + " null",
                 p0);
     }
 
     public int guardarSolicitud(String p0, Instant p1, Instant p2, Instant p3, UUID p4) {
         return actualizar(
                 "update proceso_reserva set"
-                    + " estado='ESPERANDO_TELEFONO',solicitud_telefono_id=?,solicitud_telefono_en=?,confirmacion_vence_en=?,error_code=null,error_http=null,actualizado_en=?"
+                    + " requiere_revision=false,recuperacion_intentos=0,recuperacion_proxima=null,estado='ESPERANDO_TELEFONO',solicitud_telefono_id=?,solicitud_telefono_en=?,confirmacion_vence_en=?,error_code=null,error_http=null,actualizado_en=?"
                     + " where id=?",
                 p0,
                 p1,
@@ -179,7 +217,7 @@ public class JdbcFlujoAdapter implements FlujoPersistenciaPort {
     public int guardarConfirmacion(Long p0, Instant p1, UUID p2) {
         return actualizar(
                 "update proceso_reserva set"
-                    + " estado='CONFIRMADO',reserva_id=?,error_code=null,error_http=null,actualizado_en=?"
+                    + " requiere_revision=false,estado='CONFIRMADO',reserva_id=?,error_code=null,error_http=null,actualizado_en=?"
                     + " where id=?",
                 p0,
                 p1,
@@ -200,7 +238,7 @@ public class JdbcFlujoAdapter implements FlujoPersistenciaPort {
     public int guardarResultado(String p0, String p1, Instant p2, UUID p3) {
         return actualizar(
                 "update proceso_reserva set estado=?,error_code=?,error_http=null,actualizado_en=?"
-                    + " where id=?",
+                        + " where id=?",
                 p0,
                 p1,
                 p2,
@@ -210,7 +248,7 @@ public class JdbcFlujoAdapter implements FlujoPersistenciaPort {
     public int encolarTelefono(UUID p0, UUID p1, UUID p2, String p3, String p4, Instant p5) {
         return actualizar(
                 "insert into telefono_salida(event_id,proceso_id,clave,telefono,payload,creado_en)"
-                    + " values(?,?,?,?,?,?)",
+                        + " values(?,?,?,?,?,?)",
                 p0,
                 p1,
                 p2,

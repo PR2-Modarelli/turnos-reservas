@@ -475,7 +475,7 @@ class FlujoKafkaHttpTest {
                 .thenReturn(CompletableFuture.completedFuture(null));
         jdbc.execute(
                 "alter table telefono_salida add constraint fallo_ack_fixture check(publicado_en is"
-                    + " null)");
+                        + " null)");
         try {
             publicador(productor).publicarPendientes();
             assertThat(
@@ -513,5 +513,64 @@ class FlujoKafkaHttpTest {
         org.mockito.Mockito.verifyNoInteractions(productor);
         assertThat(jdbc.queryForObject("select cancelado from telefono_salida", Boolean.class))
                 .isTrue();
+    }
+
+    @Test
+    void entradaNoCorrelacionadaSeSuspendeYReaccionaAEvidenciaTardia() {
+        jdbc.update(
+                "update proceso_reserva set hold_id=null,reservation_process_id=null where id=?",
+                id);
+        solicitar();
+        for (int intento = 1; intento <= 6; intento++) {
+            assertThat(persistenciaFlujo.entradasPendientes()).contains("request-fixture");
+            flujo.reprocesar("request-fixture");
+            assertThat(persistenciaFlujo.entradasPendientes()).doesNotContain("request-fixture");
+            if (intento < 6)
+                jdbc.update(
+                        "update evento_turnos_entrada set proximo_intento=? where"
+                                + " event_id='request-fixture'",
+                        Timestamp.from(AHORA.minusSeconds(1)));
+        }
+        assertThat(
+                        jdbc.queryForObject(
+                                "select requiere_revision from evento_turnos_entrada where"
+                                        + " event_id='request-fixture'",
+                                Boolean.class))
+                .isTrue();
+        jdbc.update(
+                "update evento_turnos_entrada set proximo_intento=? where"
+                        + " event_id='request-fixture'",
+                Timestamp.from(AHORA.minusSeconds(1)));
+        assertThat(persistenciaFlujo.entradasPendientes()).doesNotContain("request-fixture");
+        jdbc.update(
+                "update proceso_reserva set"
+                    + " hold_id='hold-fixture',reservation_process_id='process-fixture',actualizado_en=?"
+                    + " where id=?",
+                Timestamp.from(AHORA),
+                id);
+        assertThat(persistenciaFlujo.entradasPendientes()).contains("request-fixture");
+        flujo.reprocesar("request-fixture");
+        assertThat(estado()).isEqualTo("ESPERANDO_TELEFONO");
+        assertThat(persistenciaFlujo.entradasPendientes()).doesNotContain("request-fixture");
+    }
+
+    @Test
+    void eventoFinalValidoResuelveRevisionSinReenviarTelefono() throws Exception {
+        solicitar();
+        jdbc.update(
+                "update proceso_reserva set requiere_revision=true,recuperacion_intentos=6 where"
+                    + " id=?",
+                id);
+        recibir(evento("AppointmentConfirmed", "confirmed-despues-revision"));
+        assertThat(estado()).isEqualTo("CONFIRMADO");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select requiere_revision from proceso_reserva where id=?",
+                                Boolean.class,
+                                id))
+                .isFalse();
+        assertThat(info(token).body()).contains("recuperacion").contains("CONFIRMADO");
+        assertThat(jdbc.queryForObject("select count(*) from telefono_salida", Integer.class))
+                .isZero();
     }
 }
