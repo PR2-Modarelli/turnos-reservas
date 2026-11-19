@@ -7,3 +7,7 @@ target/
 *.log
 __pycache__/
 *.pyc
+
+# Material privado y artefactos del despliegue local.
+deploy/private/
+deploy/runtime/

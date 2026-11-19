@@ -1,0 +1,121 @@
+name: pr2-despliegue
+x-tls: &tls
+  SERVER_SSL_ENABLED: "true"
+  SERVER_SSL_KEY_STORE: file:/certs/server.p12
+  SERVER_SSL_KEY_STORE_TYPE: PKCS12
+  SERVER_SSL_KEY_ALIAS: application
+  SERVER_SSL_KEY_STORE_PASSWORD: ${TLS_PASSWORD:?Ejecutar preparar.sh}
+  SERVER_SSL_ENABLED_PROTOCOLS: TLSv1.3,TLSv1.2
+services:
+  catalogo-db:
+    image: postgres:18.6
+    environment:
+      POSTGRES_DB: catalogo
+      POSTGRES_USER: catalogo
+      POSTGRES_PASSWORD: ${CATALOGO_DB_PASSWORD:?Falta contraseña de catálogo}
+    volumes: [catalogo-data:/var/lib/postgresql]
+    networks: [catalogo-db]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U catalogo -d catalogo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  turnos-db:
+    image: postgres:18.6
+    environment:
+      POSTGRES_DB: turnos
+      POSTGRES_USER: turnos
+      POSTGRES_PASSWORD: ${TURNOS_DB_PASSWORD:?Falta contraseña de turnos}
+    volumes: [turnos-data:/var/lib/postgresql]
+    networks: [turnos-db]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U turnos -d turnos"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  catalogo:
+    image: pr2-catalogo:local
+    build:
+      context: ./runtime
+      dockerfile: ../Dockerfile
+      args: {JAR_FILE: catalogo.jar}
+    environment:
+      <<: *tls
+      SERVER_PORT: "8081"
+      SPRING_PROFILES_ACTIVE: prod,secret-samples
+      SPRING_CLOUD_STREAM_ENABLED: "false"
+      SPRING_CLOUD_FUNCTION_DEFINITION: ""
+      SPRING_DATASOURCE_URL: jdbc:postgresql://catalogo-db:5432/catalogo
+      SPRING_LIQUIBASE_URL: jdbc:postgresql://catalogo-db:5432/catalogo
+      CATALOGO_DB_USER: catalogo
+      CATALOGO_DB_PASSWORD: ${CATALOGO_DB_PASSWORD}
+      CATALOGO_JWT_SECRET: ${APP_JWT_SECRET:?Falta JWT}
+      CATALOGO_CATEDRA_BASE_URL: ${CATEDRA_BASE_URL:-}
+      CATALOGO_CATEDRA_TOKEN: ${CATEDRA_TOKEN:-}
+      CATALOGO_SYNC_ENABLED: ${CATALOGO_SYNC_ENABLED:-true}
+      CATALOGO_REDIS_HOST: ${CATALOGO_REDIS_HOST:-}
+      CATALOGO_REDIS_PORT: ${CATALOGO_REDIS_PORT:-6379}
+      CATALOGO_REDIS_USERNAME: ${CATALOGO_REDIS_USERNAME:-}
+      CATALOGO_REDIS_PASSWORD: ${CATALOGO_REDIS_PASSWORD:-}
+      CATALOGO_KAFKA_BOOTSTRAP_SERVERS: ${CATALOGO_KAFKA_BOOTSTRAP_SERVERS:-}
+      CATALOGO_KAFKA_CATALOG_TOPIC: ${CATALOGO_KAFKA_CATALOG_TOPIC:-}
+      CATALOGO_KAFKA_CONSUMER_GROUP: ${CATALOGO_KAFKA_CONSUMER_GROUP:-catalogo-compose}
+    ports: ["127.0.0.1:8441:8081"]
+    volumes:
+      - ./private/catalogo.p12:/certs/server.p12:ro
+      - ./private/ca.pem:/certs/ca.pem:ro
+    networks: [backend, catalogo-db]
+    depends_on:
+      catalogo-db: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --cacert, /certs/ca.pem, "https://localhost:8081/management/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+  turnos:
+    image: pr2-turnos:local
+    build:
+      context: ./runtime
+      dockerfile: ../Dockerfile
+      args: {JAR_FILE: turnos.jar}
+    environment:
+      <<: *tls
+      TURNOS_PORT: "8082"
+      TURNOS_DB_URL: jdbc:postgresql://turnos-db:5432/turnos
+      TURNOS_DB_USER: turnos
+      TURNOS_DB_PASSWORD: ${TURNOS_DB_PASSWORD}
+      TURNOS_JWT_SECRET: ${APP_JWT_SECRET}
+      CATALOGO_URL: https://catalogo:8081
+      CATEDRA_BASE_URL: ${CATEDRA_BASE_URL:-}
+      CATEDRA_TOKEN: ${CATEDRA_TOKEN:-}
+      TURNOS_KAFKA_ENABLED: ${TURNOS_KAFKA_ENABLED:-true}
+      TURNOS_KAFKA_BOOTSTRAP_SERVERS: ${TURNOS_KAFKA_BOOTSTRAP_SERVERS:-}
+      TURNOS_KAFKA_GROUP_ID: ${TURNOS_KAFKA_GROUP_ID:-}
+      TURNOS_KAFKA_CONSUMER_GROUP: ${TURNOS_KAFKA_CONSUMER_GROUP:-}
+      TURNOS_KAFKA_ACTIONS_TOPIC: ${TURNOS_KAFKA_ACTIONS_TOPIC:-}
+      TURNOS_KAFKA_PHONE_TOPIC: ${TURNOS_KAFKA_PHONE_TOPIC:-}
+      TURNOS_RECUPERACION_ENABLED: "true"
+      JAVA_TOOL_OPTIONS: -Djavax.net.ssl.trustStore=/certs/truststore.p12 -Djavax.net.ssl.trustStorePassword=changeit
+    ports: ["127.0.0.1:8442:8082"]
+    volumes:
+      - ./private/turnos.p12:/certs/server.p12:ro
+      - ./private/ca.pem:/certs/ca.pem:ro
+      - ./private/truststore.p12:/certs/truststore.p12:ro
+    networks: [backend, turnos-db]
+    depends_on:
+      turnos-db: {condition: service_healthy}
+      catalogo: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --cacert, /certs/ca.pem, "https://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+networks:
+  backend: {}
+  catalogo-db: {internal: true}
+  turnos-db: {internal: true}
+volumes:
+  catalogo-data: {}
+  turnos-data: {}

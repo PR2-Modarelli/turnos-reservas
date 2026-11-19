@@ -93,3 +93,6 @@ La [consulta y cancelación de reservas propias](docs/RESERVAS.md) permite lista
 ## Organización del código
 
 El servicio utiliza puertos y adaptadores, con `domain`, `application` e `infrastructure`, siguiendo el ejemplo de la cátedra. Ver [arquitectura y recorrido de los casos de uso](docs/ARQUITECTURA.md). Las reglas de arquitectura se verifican con ArchUnit.
+
+Para levantar ambos backends, sus bases separadas y HTTPS en contenedores, ver
+[despliegue con Docker Compose](deploy/README.md). Usa puertos y volúmenes propios.
