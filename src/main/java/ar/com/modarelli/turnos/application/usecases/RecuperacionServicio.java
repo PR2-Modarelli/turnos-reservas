@@ -13,19 +13,36 @@ public class RecuperacionServicio implements RecuperacionUseCase {
     private final ReservasGateway remoto;
     private final ReservasPort reservas;
     private final Clock clock;
+    private final ar.com.modarelli.turnos.domain.ports.in.CuentaUseCase cuentas;
 
     public RecuperacionServicio(
-            RecuperacionPort procesos, ReservasGateway remoto, ReservasPort reservas, Clock clock) {
+            RecuperacionPort procesos,
+            ReservasGateway remoto,
+            ReservasPort reservas,
+            Clock clock,
+            ar.com.modarelli.turnos.domain.ports.in.CuentaUseCase cuentas) {
         this.procesos = procesos;
         this.remoto = remoto;
         this.reservas = reservas;
         this.clock = clock;
+        this.cuentas = cuentas;
+    }
+
+    public void abandonar(
+            java.util.UUID id, ar.com.modarelli.turnos.domain.model.IdentidadUsuario identidad) {
+        long usuario = cuentas.cuenta(identidad).id();
+        if (!procesos.abandonar(id, usuario, clock.instant()))
+            throw new ar.com.modarelli.turnos.domain.exception.ErrorTurnos(
+                    ar.com.modarelli.turnos.domain.exception.EstadoOperacion.CONFLICT,
+                    "ABANDONO_NO_PERMITIDO",
+                    "Solo puede abandonarse un intento propio en revision sin identificadores"
+                        + " remotos");
     }
 
     public void recuperar() {
         for (var p : procesos.pendientes(clock.instant())) {
             // Persistir el intento antes de acceder a la red permite continuar tras un reinicio.
-            procesos.registrar(p.id(), clock.instant(), "EN_CURSO");
+            if (!procesos.iniciar(p.id(), clock.instant())) continue;
             try {
                 String resultado = "NO_VERIFICABLE";
                 if (p.remoto() != null) {

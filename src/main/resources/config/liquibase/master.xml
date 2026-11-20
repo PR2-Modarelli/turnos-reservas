@@ -7,4 +7,5 @@
  <include file="config/liquibase/changelog/202611100001_flujo_kafka.xml"/>
  <include file="config/liquibase/changelog/202611100002_cancelacion.xml"/>
  <include file="config/liquibase/changelog/202611170001_recuperacion.xml"/>
+ <include file="config/liquibase/changelog/202611180001_limites_recuperacion.xml"/>
 </databaseChangeLog>

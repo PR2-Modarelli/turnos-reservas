@@ -95,6 +95,10 @@ public class FlujoKafkaServicio
         var p = filas.getFirst();
         UUID id = p.id();
         String estado = p.estado();
+        if ("ABANDONADO_LOCAL".equals(estado)) {
+            terminar(e, "ABANDONO_LOCAL");
+            return;
+        }
         if ("AppointmentCancelled".equals(e.eventType())) {
             if ("CANCELADO".equals(estado)) {
                 terminar(e, null);
@@ -227,6 +231,7 @@ public class FlujoKafkaServicio
         Map<String, Object> vista = new LinkedHashMap<>();
         vista.put("id", id);
         vista.put("estado", p.estado());
+        vista.put("recuperacion", datos.recuperacion(id));
         vista.put("requestEventId", p.solicitudId());
         vista.put("reservationId", p.reservaId());
         vista.put("ultimoError", p.ultimoError());

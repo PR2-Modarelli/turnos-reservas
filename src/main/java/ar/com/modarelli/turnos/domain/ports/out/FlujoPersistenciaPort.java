@@ -36,6 +36,8 @@ public interface FlujoPersistenciaPort {
 
     List<String> telefonos(UUID id, UUID clave);
 
+    Map<String, Object> recuperacion(UUID id);
+
     List<String> entradasPendientes();
 
     void cancelarVencidos(Instant ahora);

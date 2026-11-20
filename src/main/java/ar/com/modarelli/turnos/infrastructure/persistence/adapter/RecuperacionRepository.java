@@ -14,8 +14,13 @@ import java.util.*;
 public class RecuperacionRepository implements RecuperacionPort {
     private final JdbcTemplate jdbc;
 
-    public RecuperacionRepository(JdbcTemplate jdbc) {
+    private final ar.com.modarelli.turnos.infrastructure.config.LimitesRecuperacion limites;
+
+    public RecuperacionRepository(
+            JdbcTemplate jdbc,
+            ar.com.modarelli.turnos.infrastructure.config.LimitesRecuperacion limites) {
         this.jdbc = jdbc;
+        this.limites = limites;
     }
 
     @Transactional
@@ -43,8 +48,14 @@ public class RecuperacionRepository implements RecuperacionPort {
                 Timestamp.from(ahora.minusSeconds(30)));
         jdbc.update(
                 "update proceso_reserva set estado='VENCIDO',actualizado_en=? where estado in"
-                    + " ('BLOQUEADO','CONFIRMACION_RECHAZADA') and vence_en<=?",
+                        + " ('BLOQUEADO','CONFIRMACION_RECHAZADA') and vence_en<=?",
                 Timestamp.from(ahora),
+                Timestamp.from(ahora));
+        jdbc.update(
+                "update proceso_reserva set requiere_revision=true where recuperacion_intentos>=?"
+                    + " and recuperacion_proxima<=? and estado in"
+                    + " ('RESULTADO_DESCONOCIDO','CONFIRMACION_DESCONOCIDA','ESPERANDO_TELEFONO','TELEFONO_ENVIADO','CANCELACION_DESCONOCIDA')",
+                limites.maxIntentos,
                 Timestamp.from(ahora));
         return jdbc.query(
                 """
@@ -53,7 +64,8 @@ join app_user u on u.id=p.usuario_id
 where p.estado in ('SOLICITANDO','RESULTADO_DESCONOCIDO','CONFIRMANDO',
 'CONFIRMACION_DESCONOCIDA','ESPERANDO_TELEFONO','TELEFONO_ENVIADO',
 'CANCELANDO','CANCELACION_DESCONOCIDA')
-and p.actualizado_en < ? and (p.recuperacion_en is null or p.recuperacion_en < ?)
+and not p.requiere_revision and p.actualizado_en < ?
+and (p.recuperacion_proxima is null or p.recuperacion_proxima <= ?)
 order by p.recuperacion_en nulls first,p.creado_en,p.id limit 20
 """,
                 (rs, n) ->
@@ -63,14 +75,56 @@ order by p.recuperacion_en nulls first,p.creado_en,p.id limit 20
                                 rs.getString(3),
                                 rs.getString(4)),
                 Timestamp.from(ahora.minusSeconds(30)),
-                Timestamp.from(ahora.minusSeconds(60)));
+                Timestamp.from(ahora));
+    }
+
+    public boolean abandonar(UUID id, long usuario, Instant ahora) {
+        return jdbc.update(
+                        """
+update proceso_reserva set estado='ABANDONADO_LOCAL',actualizado_en=?,
+recuperacion_resultado='ABANDONO_LOCAL',requiere_revision=false,recuperacion_proxima=null
+where id=? and usuario_id=? and
+((estado='RESULTADO_DESCONOCIDO' and requiere_revision and hold_id is null and reservation_process_id is null
+and reserva_id is null and solicitud_telefono_id is null and confirmacion_iniciada_en is null)
+or estado='ABANDONADO_LOCAL')
+""",
+                        Timestamp.from(ahora),
+                        id,
+                        usuario)
+                == 1;
+    }
+
+    public boolean iniciar(UUID id, Instant ahora) {
+        return jdbc.update(
+                        """
+update proceso_reserva set recuperacion_intentos=recuperacion_intentos+1,
+recuperacion_en=?, recuperacion_resultado='EN_CURSO',
+recuperacion_proxima=cast(? as timestamptz) + make_interval(secs => least(3600.0, ? * power(2.0, least(recuperacion_intentos, 10))))
+where id=? and not requiere_revision and recuperacion_intentos < ?
+and (recuperacion_proxima is null or recuperacion_proxima <= ?)
+and estado in ('RESULTADO_DESCONOCIDO','CONFIRMACION_DESCONOCIDA','ESPERANDO_TELEFONO',
+'TELEFONO_ENVIADO','CANCELACION_DESCONOCIDA')
+""",
+                        Timestamp.from(ahora),
+                        Timestamp.from(ahora),
+                        limites.esperaSegundos,
+                        id,
+                        limites.maxIntentos,
+                        Timestamp.from(ahora))
+                == 1;
     }
 
     public void registrar(UUID id, Instant ahora, String resultado) {
         jdbc.update(
-                "update proceso_reserva set recuperacion_en=?,recuperacion_resultado=? where id=?",
+                """
+                update proceso_reserva set recuperacion_en=?,recuperacion_resultado=?,
+                requiere_revision=(estado in ('RESULTADO_DESCONOCIDO','CONFIRMACION_DESCONOCIDA',
+                'ESPERANDO_TELEFONO','TELEFONO_ENVIADO','CANCELACION_DESCONOCIDA')
+                and (recuperacion_intentos >= ? or reservation_process_id is null)) where id=?
+                """,
                 Timestamp.from(ahora),
                 resultado,
+                limites.maxIntentos,
                 id);
     }
 }

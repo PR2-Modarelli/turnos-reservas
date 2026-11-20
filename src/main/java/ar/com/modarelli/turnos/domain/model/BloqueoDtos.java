@@ -9,6 +9,7 @@ public final class BloqueoDtos {
     public record Solicitud(Long profesionalId, LocalDate fecha, LocalTime horaInicio) {}
 
     public enum Estado {
+        ABANDONADO_LOCAL,
         CREADO,
         SOLICITANDO,
         BLOQUEADO,

@@ -9,5 +9,9 @@ public interface RecuperacionPort {
 
     List<Pendiente> pendientes(Instant ahora);
 
+    boolean abandonar(UUID id, long usuario, Instant ahora);
+
+    boolean iniciar(UUID id, Instant ahora);
+
     void registrar(UUID id, Instant ahora, String resultado);
 }
