@@ -53,6 +53,16 @@ public class CuentaResource {
                 .body(token);
     }
 
+    @PatchMapping("/account")
+    public Cuenta actualizarNombres(
+            @Valid @RequestBody
+                    ar.com.modarelli.turnos.infrastructure.web.dto.CuentaRequests.Nombres datos,
+            @AuthenticationPrincipal Jwt jwt) {
+        return servicio.actualizarNombres(
+                new Nombres(datos.firstName(), datos.lastName()),
+                ar.com.modarelli.turnos.infrastructure.config.IdentidadMapper.desde(jwt));
+    }
+
     @GetMapping("/account")
     public Cuenta cuenta(@AuthenticationPrincipal Jwt jwt) {
         return servicio.cuenta(

@@ -77,6 +77,27 @@ public class CuentaServicio implements ar.com.modarelli.turnos.domain.ports.in.C
         }
     }
 
+    @Transactional
+    public Cuenta actualizarNombres(Nombres datos, IdentidadUsuario identidad) {
+        Cuenta actual = cuenta(identidad);
+        String nombre = nombreValido(datos == null ? null : datos.firstName());
+        String apellido = nombreValido(datos == null ? null : datos.lastName());
+        return usuarios.actualizarNombres(actual.publicId(), actual.login(), nombre, apellido)
+                .orElseThrow(this::noAutorizado);
+    }
+
+    private String nombreValido(String valor) {
+        String normalizado = valor == null ? "" : valor.strip();
+        // El usuario local admite hasta 50 caracteres; la catedra requiere al menos dos.
+        if (normalizado.length() < 2 || normalizado.length() > 50)
+            throw new ErrorTurnos(
+                    EstadoOperacion.BAD_REQUEST,
+                    "DATOS_PACIENTE_INCOMPLETOS",
+                    "Nombre y apellido deben tener entre 2 y 50 caracteres sin espacios"
+                        + " exteriores");
+        return normalizado;
+    }
+
     private ErrorTurnos duplicado(String code) {
         return new ErrorTurnos(EstadoOperacion.BAD_REQUEST, code, "La cuenta ya existe");
     }

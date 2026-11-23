@@ -30,6 +30,24 @@ public class UsuarioRepository implements UsuarioPort {
                 .findFirst();
     }
 
+    public Optional<Cuenta> actualizarNombres(
+            UUID id, String login, String nombre, String apellido) {
+        return jdbc
+                .query(
+                        """
+                        update app_user set first_name=?,last_name=?
+                        where public_id=? and login=? and activated=true returning *
+                        """,
+                        this::mapear,
+                        nombre,
+                        apellido,
+                        id,
+                        login)
+                .stream()
+                .findFirst()
+                .map(Usuario::cuenta);
+    }
+
     public boolean existeEmail(String email) {
         return Boolean.TRUE.equals(
                 jdbc.queryForObject(

@@ -21,6 +21,13 @@ public final class CuentaDtos {
         }
     }
 
+    public record Nombres(String firstName, String lastName) {
+        @Override
+        public String toString() {
+            return "Nombres[datos privados]";
+        }
+    }
+
     public record Credenciales(String username, String password, Boolean rememberMe) {
         @Override
         public String toString() {

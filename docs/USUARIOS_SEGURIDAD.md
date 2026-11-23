@@ -82,3 +82,42 @@ Los errores propios usan `application/problem+json`. No se exponen mensajes SQL,
 ## Pruebas
 
 `./mvnw test` usa PostgreSQL real en Testcontainers. Comprueba hash salado, normalización, unicidad concurrente, validaciones, rechazo de campos privilegiados, login, vencimientos, usuarios inactivos, lectura exclusiva de la cuenta y el recorrido HTTP hasta disponibilidad. No exige credenciales reales ni conexión a la red de cátedra.
+
+## Completar nombre y apellido (issue #16)
+
+`PATCH /api/account` exige JWT con acceso a las APIs y una cuenta propia activa.
+El propietario se obtiene del `uid` y el `sub` verificados, no del cuerpo.
+
+```json
+{"firstName":"Eva","lastName":"Pérez"}
+```
+
+Ambos campos son obligatorios en esta operación. Se eliminan espacios exteriores;
+cada nombre debe tener entre 2 y 50 caracteres después de normalizar. El límite
+HTTP es también de 50 caracteres por campo. Se admiten acentos y nombres compuestos.
+No se modifica la validación del registro existente: una cuenta incompleta puede
+completarse antes de confirmar un bloqueo vigente.
+
+Devuelve 200 con la cuenta actualizada, en el mismo formato que `GET /api/account`.
+No cambia login, identificadores, contraseña, email, idioma, imagen, activación,
+autoridades ni fecha de creación. El JWT vigente sigue siendo utilizable: la
+confirmación lee los datos actuales de la cuenta al ejecutar la operación. Las
+reservas históricas no se reescriben por modificar el perfil.
+
+Los campos ajenos al contrato se rechazan con 400; no se ignoran intentos de enviar
+`id`, `publicId`, `usuarioId`, `password`, `authorities` o `activated`. Los nombres
+inválidos devuelven 400 sin cambios parciales; la falta de sesión o una cuenta
+inactiva devuelve 401. Un JWT sin permisos devuelve 403.
+
+```bash
+curl -sS -i --max-time 15 --cacert deploy/private/ca.pem \
+  -X PATCH https://localhost:8442/api/account \
+  -H "Authorization: Bearer $TOKEN_HTTPS" \
+  -H 'Content-Type: application/json' \
+  -d '{"firstName":"Eva","lastName":"Pérez"}'
+```
+
+En arquitectura hexagonal, el controlador valida el DTO HTTP y llama a
+`CuentaUseCase.actualizarNombres`; el caso de uso valida la cuenta y normaliza los
+nombres; `UsuarioPort` delega la escritura al adaptador PostgreSQL. La actualización
+comprueba nuevamente identidad y activación en la misma sentencia de persistencia.

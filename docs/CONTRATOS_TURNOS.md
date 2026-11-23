@@ -42,3 +42,12 @@ Los errores propios usan `application/problem+json`. No se devuelven cuerpos ext
 ## Propiedad y alcance
 
 La disponibilidad no almacena una réplica de catálogo. Turnos ya persiste sus usuarios en `app_user`, con PostgreSQL y migraciones exclusivas; ver [usuarios y seguridad](USUARIOS_SEGURIDAD.md). No se permite usar la base del catálogo. La creación de holds y la consulta del proceso propio se describen en [bloqueos](BLOQUEOS.md). La [confirmación inicial REST](CONFIRMACION.md) también está implementada. El [paso Kafka y los resultados finales](FLUJO_KAFKA.md) están implementados. La [consulta y cancelación de reservas propias](RESERVAS.md) está implementada. Reconciliación general de procesos, HTTPS y despliegue Compose completo siguen pendientes. El uso local de HTTP queda limitado al desarrollo; el despliegue debe proteger el transporte.
+
+### Completar los datos propios
+
+`PATCH /api/account`, con JWT del usuario, actualiza exclusivamente `firstName` y
+`lastName`. Ambos deben tener 2..50 caracteres sin espacios exteriores. Respuesta
+200: cuenta actualizada. Véanse validaciones, errores y ejemplo HTTPS en
+[USUARIOS_SEGURIDAD.md](USUARIOS_SEGURIDAD.md#completar-nombre-y-apellido-issue-16).
+Esta operación permite corregir `DATOS_PACIENTE_INCOMPLETOS` y repetir la confirmación
+del mismo bloqueo si continúa vigente, sin solicitar otro hold.

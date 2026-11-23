@@ -19,6 +19,14 @@ public final class CuentaRequests {
         }
     }
 
+    public record Nombres(
+            @NotBlank @Size(max = 50) String firstName, @NotBlank @Size(max = 50) String lastName) {
+        @Override
+        public String toString() {
+            return "Nombres[datos privados]";
+        }
+    }
+
     public record Credenciales(
             @NotBlank @Size(max = 254) String username,
             @NotNull @Size(min = 4, max = 100) String password,

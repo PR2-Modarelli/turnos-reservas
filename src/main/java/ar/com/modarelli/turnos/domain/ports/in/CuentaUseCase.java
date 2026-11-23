@@ -15,4 +15,6 @@ public interface CuentaUseCase {
     Token autenticar(Credenciales datos);
 
     Cuenta cuenta(IdentidadUsuario identidad);
+
+    Cuenta actualizarNombres(Nombres nombres, IdentidadUsuario identidad);
 }

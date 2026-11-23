@@ -21,5 +21,7 @@ public interface UsuarioPort {
 
     boolean existeEmail(String email);
 
+    Optional<Cuenta> actualizarNombres(UUID id, String login, String nombre, String apellido);
+
     Cuenta crear(Registro datos, String login, String email, String hash, Instant ahora);
 }

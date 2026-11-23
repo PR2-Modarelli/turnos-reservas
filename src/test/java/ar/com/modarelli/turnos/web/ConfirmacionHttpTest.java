@@ -538,7 +538,7 @@ class ConfirmacionHttpTest {
         String id = proceso();
         jdbc.execute(
                 "alter table proceso_reserva add constraint ck_test_confirmacion check"
-                    + " (confirmacion_vence_en is null)");
+                        + " (confirmacion_vence_en is null)");
         try {
             var r = confirmar(jwt, id, "");
             assertThat(r.statusCode()).isEqualTo(503);
@@ -583,5 +583,38 @@ class ConfirmacionHttpTest {
         } finally {
             salirConfirmacion.countDown();
         }
+    }
+
+    @Test
+    void usuarioCompletaNombresYContinuaElMismoBloqueoConElMismoJwt() throws Exception {
+        jdbc.update("update app_user set first_name=null,last_name='A' where id=?", usuario.id());
+        String id = proceso();
+        var fallida = confirmar(jwt, id, "");
+        assertThat(fallida.statusCode()).isEqualTo(400);
+        assertThat(fallida.body()).contains("DATOS_PACIENTE_INCOMPLETOS");
+        assertThat(confirmaciones.get()).isZero();
+        var actualizada =
+                cliente.send(
+                        HttpRequest.newBuilder(
+                                        URI.create("http://localhost:" + puerto + "/api/account"))
+                                .header("Authorization", "Bearer " + jwt)
+                                .header("Content-Type", "application/json")
+                                .method(
+                                        "PATCH",
+                                        HttpRequest.BodyPublishers.ofString(
+                                                "{\"firstName\":\"  Eva "
+                                                    + " \",\"lastName\":\"Pérez\"}"))
+                                .build(),
+                        HttpResponse.BodyHandlers.ofString());
+        assertThat(actualizada.statusCode()).isEqualTo(200);
+        var confirmada = confirmar(jwt, id, "");
+        assertThat(confirmada.statusCode()).isEqualTo(202);
+        assertThat(confirmaciones.get()).isEqualTo(1);
+        var enviados = json.readTree(bodyConfirmacion.get());
+        assertThat(enviados.get("patientFirstName").asText()).isEqualTo("Eva");
+        assertThat(enviados.get("patientLastName").asText()).isEqualTo("Pérez");
+        assertThat(enviados.get("externalPatientId").asText())
+                .isEqualTo(usuario.publicId().toString());
+        assertThat(envios.get()).isEqualTo(1);
     }
 }

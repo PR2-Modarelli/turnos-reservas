@@ -280,9 +280,109 @@ class CuentasHttpTest {
         assertThat(
                         jdbc.queryForObject(
                                 "select count(*) from information_schema.tables where"
-                                    + " table_schema='public' and table_name='profesional'",
+                                        + " table_schema='public' and table_name='profesional'",
                                 Integer.class))
                 .isZero();
         assertThat(usuarios.porLogin("eva")).isPresent();
+    }
+
+    HttpResponse<String> actualizar(String token, String body) throws Exception {
+        var req =
+                HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + "/api/account"))
+                        .header("Content-Type", "application/json");
+        if (token != null) req.header("Authorization", "Bearer " + token);
+        return cliente.send(
+                req.method("PATCH", HttpRequest.BodyPublishers.ofString(body)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void actualizaSoloNombresYConservaIdentidadCredencialesYDatos() throws Exception {
+        post("/api/register", registro("eva", "eva@example.com"));
+        String token = token("eva");
+        var antes = usuarios.porLogin("eva").orElseThrow();
+        var respuesta =
+                actualizar(token, "{\"firstName\":\"  María Eva  \",\"lastName\":\"  Pérez  \"}");
+        assertThat(respuesta.statusCode()).isEqualTo(200);
+        var despues = usuarios.porLogin("eva").orElseThrow();
+        assertThat(despues.cuenta())
+                .isEqualTo(
+                        new ar.com.modarelli.turnos.domain.model.CuentaDtos.Cuenta(
+                                antes.cuenta().id(),
+                                antes.cuenta().publicId(),
+                                "eva",
+                                "María Eva",
+                                "Pérez",
+                                antes.cuenta().email(),
+                                antes.cuenta().imageUrl(),
+                                antes.cuenta().langKey(),
+                                true,
+                                antes.cuenta().authorities(),
+                                antes.cuenta().createdDate()));
+        assertThat(despues.passwordHash()).isEqualTo(antes.passwordHash());
+        assertThat(respuesta.body()).doesNotContain("password", antes.passwordHash(), "id_token");
+        assertThat(cuenta(token).body()).contains("María Eva", "Pérez");
+        assertThat(post("/api/authenticate", login("eva", "clave-fixture", false)).statusCode())
+                .isEqualTo(200);
+    }
+
+    @Test
+    void nombresInvalidosNoModificanLaCuenta() throws Exception {
+        post("/api/register", registro("eva", "eva@example.com"));
+        String token = token("eva");
+        var antes = usuarios.porLogin("eva").orElseThrow().cuenta();
+        for (String body :
+                List.of(
+                        "{}",
+                        "{\"firstName\":null,\"lastName\":\"Pérez\"}",
+                        "{\"firstName\":\" A \",\"lastName\":\"Pérez\"}",
+                        "{\"firstName\":\"Eva\",\"lastName\":\"  \"}",
+                        json.writeValueAsString(
+                                Map.of("firstName", "a".repeat(51), "lastName", "Pérez")))) {
+            assertThat(actualizar(token, body).statusCode()).isEqualTo(400);
+            assertThat(usuarios.porLogin("eva").orElseThrow().cuenta()).isEqualTo(antes);
+        }
+    }
+
+    @Test
+    void noAceptaCambiarCamposProtegidosNiOtraIdentidad() throws Exception {
+        post("/api/register", registro("eva", "eva@example.com"));
+        post("/api/register", registro("otro", "otro@example.com"));
+        String token = token("eva");
+        var antes = usuarios.porLogin("eva").orElseThrow();
+        for (String campo :
+                List.of(
+                        "id",
+                        "publicId",
+                        "usuarioId",
+                        "login",
+                        "password",
+                        "authorities",
+                        "activated",
+                        "email")) {
+            var body = new LinkedHashMap<String, Object>();
+            body.put("firstName", "Eva");
+            body.put("lastName", "Pérez");
+            body.put(campo, "otro");
+            assertThat(actualizar(token, json.writeValueAsString(body)).statusCode())
+                    .isEqualTo(400);
+            assertThat(usuarios.porLogin("eva").orElseThrow()).isEqualTo(antes);
+        }
+        assertThat(actualizar(token, "{\"firstName\":\"Eva\",\"lastName\":\"Pérez\"}").statusCode())
+                .isEqualTo(200);
+        assertThat(usuarios.porLogin("otro").orElseThrow().cuenta().firstName())
+                .isEqualTo("Maria Eva");
+    }
+
+    @Test
+    void actualizarExigeSesionYCuentaActiva() throws Exception {
+        String body = "{\"firstName\":\"Eva\",\"lastName\":\"Pérez\"}";
+        assertThat(actualizar(null, body).statusCode()).isEqualTo(401);
+        post("/api/register", registro("eva", "eva@example.com"));
+        String token = token("eva");
+        jdbc.update("update app_user set activated=false where login='eva'");
+        assertThat(actualizar(token, body).statusCode()).isEqualTo(401);
+        assertThat(usuarios.porLogin("eva").orElseThrow().cuenta().firstName())
+                .isEqualTo("Maria Eva");
     }
 }
